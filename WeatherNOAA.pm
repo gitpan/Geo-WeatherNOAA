@@ -2,7 +2,7 @@
 # Geo::WeatherNOAA.pm (Weather Module)
 # Mark Solomon <msolomon@seva.net> 
 # Started 3/2/98
-# $Id: WeatherNOAA.pm,v 3.9 1998/09/03 16:25:22 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 3.12 1998/11/11 14:29:10 msolomon Exp $
 # $Name:  $
 # Copyright 1998 Mark Solomon (See GNU GPL)
 #
@@ -30,8 +30,11 @@ require Exporter;
 
 
 # Preloaded methods go here.
-$VERSION = do { my @r = (q$Revision: 3.9 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 3.12 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
+
+use vars '$proxy_from_env';
+$proxy_from_env = 0;
 
 sub states {
 	return (qw/al ak az ar ca co ct de fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nh nj nm nv ny nc nd oh ok or pa pr ri sc sd tn tx ut vt va wa wv wi wy/);
@@ -60,6 +63,7 @@ sub getURL {
     #
     if (! $UA) {
 	$UA = new LWP::UserAgent;
+        $UA->env_proxy if $proxy_from_env;
     }
     $UA->agent("Geo-WeatherNOAA/$VERSION");
     
@@ -145,7 +149,7 @@ sub get_forecast {
 		push @$ref, /^\.\.\.(.*)/;
 	    }
 	    elsif (/^\.\w/) {	# This indicates a list item
-		my ($key,$value) = /\.([\w\s]+)\.\.\.(.*)$/;
+		my ($key,$value) = /\.([\w\s]+)\.\.\.*(.*)$/;
 		First_caps($key);
 		$value = ucfirst(lc($value));
 		push @$ref, join ': ', $key, $value;
@@ -462,6 +466,10 @@ manpage for specific instructions. A basic example is like this:
     my $ua = new LWP::UserAgent;
     $ua->proxy(['http', 'ftp'], 'http://proxy.my.net:8080/');
 
+If you merely wish to set your proxy data from environment variables
+(as in C<$ua->env_proxy>), simply set
+
+    $Geo::WeatherNOAA::proxy_from_env = 1;
 
 This function returns a hash with the following keys:
 
@@ -555,13 +563,18 @@ manpage for specific instructions. A basic example is like this:
     my $ua = new LWP::UserAgent;
     $ua->proxy(['http', 'ftp'], 'http://proxy.my.net:8080/');
 
+If you merely wish to set your proxy data from environment variables
+(as in C<$ua->env_proxy>), simply set
+
+    $Geo::WeatherNOAA::proxy_from_env = 1;
+
 This function returns a hash with the following keys:
 
   CITY		=> Name of reported city
   SKY/WX	=> Sky conditions
   TEMP		=> Current temp
   DEWPT		=> Dewpoint
-  RH		=> ???
+  RH		=> Relative Humidity
   WIND		=> Wind direction and speed
   PRES		=> Pressure
   REMARKS	=> Remarks

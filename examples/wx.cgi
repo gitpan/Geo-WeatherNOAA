@@ -5,8 +5,10 @@
 #
 #	3/2/98 Mark Solomon <msolomon@seva.net>
 #	Copyright 1998 Mark Solomon (See GNU GPL)
-#	$Id: wx.cgi,v 3.13 1998/09/03 16:27:05 msolomon Exp msolomon $
+#	$Id: wx.cgi,v 3.16 1998/11/11 14:33:18 msolomon Exp $
 #	$Name:  $
+#	11/98 Added ability to feed a background color as an argument using
+#		'?BGCOLOR=808000' on the URL, etc.
 #
 
 use lib '.';
@@ -24,11 +26,11 @@ BEGIN {
 # $ua->proxy(['http', 'ftp'], 'http://www.seva.net:8001/');
 
 
-my $VERSION = do { my @r = (q$Revision: 3.13 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+my $VERSION = do { my @r = (q$Revision: 3.16 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $ME = ( split('/',$0) )[-1] . " $VERSION";
 
 my $q = new CGI;
-my $self = $q->self_url;
+my $self = $q->script_name;
 my $width = 580;
 my $city = uc($q->param("city")) || 'NEWPORT NEWS';
 my $state = uc($q->param('state')) || 'VA';
@@ -46,16 +48,17 @@ elsif ( lc($state) eq 'va') {
 	# I dont want to redirect to a waiting page for Virginia
 }
 elsif ( ! $q->param(REDIR) ) {
-	my $MyURL = 'http://www.seva.net/~msolomon/wx/wx.cgi';
+	$page_bg = $q->param(BGCOLOR) || '#e5e5e5';
+	# my $MyURL = 'http://www.seva.net/~msolomon/wx/wx.cgi';
 	my $mycity = $city;
 	$mycity =~ tr/ /+/d;
-	$MyURL .= "?city=$mycity&state=$state&REDIR=1";
+	my $MyURL .= "${self}?city=$mycity&state=$state&REDIR=1";
 	print "Content-type:text/html\n\n";
 	print '<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">';
 	print "<HTML><HEAD><TITLE>Mark's Local Wx</TITLE>\n";
 	print "<META HTTP-EQUIV=\"Refresh\" CONTENT=\"0; URL=$MyURL\">\n";
 	print "</HEAD>\n";
-	print "<BODY BGCOLOR=\"#e5e5e5\">\n";
+	print "<BODY BGCOLOR=\"$page_bg\">\n";
 	print "<H2>Please wait, collecting weather data from NOAA</H2>\n";
 	print "Although this server caches weather for the state of Virginia automatically, other states' data needs to be retreived.\n";
 	print "<HR WIDTH=\"75%\">\nIf your browser is not currently trying to load the weather data page, <A HREF=\"$MyURL\">try this link.</A>\n";
@@ -84,11 +87,13 @@ my $out;
 
 $forecast 	= get_currentWX_html($city,$state,30);
 
+$page_bg = $q->param(BGCOLOR) || '#e5e5e5';
 $out = $q->header,"\n";
-$out .= $q->start_html(-title=>"Mark's Local Wx for $city, $state",-bgcolor=>'#e5e5e5');
-$out .= "<FONT SIZE=1>According to <A HREF=\"http://www.noaa.gov\">NOAA</A>:</FONT>\n";
-$out .= "<P>\n";
+$out .= $q->start_html(-title=>"Mark's Local Wx for $city, $state",-bgcolor=>$page_bg);
 $out .= "<CENTER>\n";
+$out .= "<TABLE WIDTH=$width CELLPADDING=0 CELLSPACING=0 BORDER=0><TR><TD>\n";
+$out .= "<FONT SIZE=1>According to <A HREF=\"http://www.noaa.gov\">NOAA</A>:</FONT>\n";
+$out .= "</TD></TR></TABLE>\n";
 $out .= "<TABLE WIDTH=$width CELLPADDING=0 CELLSPACING=0 BORDER=0 BGCOLOR=\"#000000\"><TR><TD>\n";
 $out .= "<TABLE WIDTH=$width CELLPADDING=4 CELLSPACING=1 BORDER=0 BGCOLOR=\"#000000\">\n";
 $out .= "<TR><TD $MEDIUM><FONT $MEDIUMTEXT SIZE=\"+2\">Current weather for $city, $state</FONT></TD>\n";
@@ -195,7 +200,7 @@ sub run_list {
 		elsif ($data =~ /partly sunny/i) {
 			$gif = 'ptcloudy.gif';
 		}
-		elsif ($data =~ /partly sunny/i) {
+		elsif ($data =~ /mostly sunny/i) {
 			$gif = 'mosunny.gif';
 		}
 		elsif ($data =~ /freez/i) {
@@ -251,7 +256,8 @@ $out .= <<ENDBOTTOM;
 <A HREF="./wx.cgi?city=dover&state=de">Dover, DE</A> |
 <A HREF="./wx.cgi?city=chicago&state=il">Chicago, IL</A>
 </FONT>
-<HR WIDTH="$width" NOSHADE>
+<!-- <HR WIDTH="$width" NOSHADE>  -->
+<BR>
 <FONT SIZE=2><I>&copy; 1998 Mark Solomon</I></FONT>
 </CENTER>
 </BODY>

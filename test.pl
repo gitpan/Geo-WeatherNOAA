@@ -14,6 +14,8 @@ print "ok 1\n";
 
 ######################### End of black magic.
 
+$Geo::WeatherNOAA::proxy_from_env = 1;
+
 # Insert your test code below (better if it prints "ok 13"
 # (correspondingly "not ok 13") depending on the success of chunk 13
 # of the test code):
