@@ -2,7 +2,7 @@
 # Geo::WeatherNOAA.pm (Weather Module)
 # Mark Solomon <msolomon@seva.net> 
 # Started 3/2/98
-# $Id: WeatherNOAA.pm,v 3.2 1998/03/21 14:10:26 msolomon Exp msolomon $
+# $Id: WeatherNOAA.pm,v 3.4 1998/03/21 23:44:20 msolomon Exp msolomon $
 # $Name:  $
 # Copyright 1998 Mark Solomon (See GNU GPL)
 #
@@ -29,7 +29,7 @@ require Exporter;
 
 
 # Preloaded methods go here.
-$VERSION = do { my @r = (q$Revision: 3.2 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 3.4 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 sub states {
@@ -115,6 +115,7 @@ sub get_forecast {
 	    my $ref;
 	    $ref = \@NEAR if $type eq 'NEAR';
 	    $ref = \@EXTENDED if $type eq 'EXTENDED';
+	    next unless $ref;
 	    if (/^\.\.\./) {	# This indicates a warning
 		push @$ref, /^\.\.\.(.*)/;
 	    }
@@ -125,7 +126,7 @@ sub get_forecast {
 		push @$ref, join ': ', $key, $value;
 	    }
 	    else {
-		$ref->[-1] .= ' ' . lc($_) if @#{$ref};
+		$ref->[-1] .= ' ' . lc($_) if $#{$ref} >= 0;
 	    }
 	}
     }
@@ -285,7 +286,7 @@ sub get_currentWX_html {
 
     my $rh_pres;
     if ($wx{RH}) {
-	$rh_pres = " The relative humidity is $wx{RH}\%";
+	$rh_pres = " The relative humidity was $wx{RH}\%";
     }
     if ($wx{PRES}) {
 	my %rise_fall = qw/R rising S steady F falling/;
@@ -297,7 +298,7 @@ sub get_currentWX_html {
 	else {
 		$rh_pres .= " B";
 	}
-	$rh_pres .= "arometric pressure is $direction at $wx{PRES} in";
+	$rh_pres .= "arometric pressure was $direction at $wx{PRES} in";
     }
     $rh_pres .= '.' if $rh_pres;
 	    
