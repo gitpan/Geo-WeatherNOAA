@@ -1,17 +1,35 @@
 
 RCS file: RCS/WeatherNOAA.pm,v
 Working file: WeatherNOAA.pm
-head: 3.1
+head: 3.5
 branch:
 locks: strict
-	msolomon: 3.1
+	msolomon: 3.5
 access list:
+symbolic names:
 keyword substitution: kv
-total revisions: 1;	selected revisions: 1
+total revisions: 5;	selected revisions: 5
 description:
 Geo::WeatherNOAA
 ----------------------------
-revision 3.1	locked by: msolomon;
+revision 3.5	locked by: msolomon;
+date: 1998/03/23 14:51:57;  author: msolomon;  state: Exp;  lines: +3 -3
+Forgot 'nv' in state list
+----------------------------
+revision 3.4
+date: 1998/03/21 23:44:20;  author: msolomon;  state: Exp;  lines: +4 -4
+changed 'is' to 'was'
+----------------------------
+revision 3.3
+date: 1998/03/21 23:43:37;  author: msolomon;  state: Exp;  lines: +4 -3
+Really fixed that -1 subscript problem this time :)
+----------------------------
+revision 3.2
+date: 1998/03/21 14:10:26;  author: msolomon;  state: Exp;  lines: +26 -9
+fixed test.pl's error for negative subscript on ref
+added rh and pres to html out of currentWX_html()
+----------------------------
+revision 3.1
 date: 1998/03/14 18:23:40;  author: msolomon;  state: Exp;
 Name change to Geo::Weather
 =============================================================================

@@ -1,11 +1,11 @@
-#!/usr/local/bin/perl -T
+#!/usr/bin/perl -T
 #
 #	Get local Wx data from http://iwin.nws.noaa.gov/iwin/va/zone.html,
 #	find the local zone, and place this data in a file.
 #
 #	3/2/98 Mark Solomon <msolomon@seva.net>
 #	Copyright 1998 Mark Solomon (See GNU GPL)
-#	$Id: wx.cgi,v 3.4 1998/03/15 21:40:03 msolomon Exp msolomon $
+#	$Id: wx.cgi,v 3.11 1998/07/22 19:32:18 msolomon Exp msolomon $
 #	$Name:  $
 #
 
@@ -19,11 +19,12 @@ BEGIN {
 }
 
 
-my $VERSION = do { my @r = (q$Revision: 3.4 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+my $VERSION = do { my @r = (q$Revision: 3.11 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $ME = ( split('/',$0) )[-1] . " $VERSION";
 
 my $q = new CGI;
-
+my $self = $q->self_url;
+my $width = 580;
 my $city = uc($q->param("city")) || 'NEWPORT NEWS';
 my $state = uc($q->param('state')) || 'VA';
 Geo::WeatherNOAA::First_caps($city);
@@ -37,6 +38,7 @@ if (! grep /^\L$state$/, @states) {
 	exit(1);
 }
 elsif ( lc($state) eq 'va') {
+	# I dont want to redirect to a waiting page for Virginia
 }
 elsif ( ! $q->param(REDIR) ) {
 	my $MyURL = 'http://www.seva.net/~msolomon/wx/wx.cgi';
@@ -47,11 +49,12 @@ elsif ( ! $q->param(REDIR) ) {
 	print '<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">';
 	print "<HTML><HEAD><TITLE>Mark's Local Wx</TITLE>\n";
 	print "<META HTTP-EQUIV=\"Refresh\" CONTENT=\"0; URL=$MyURL\">\n";
-	print "<BODY BGCOLOR='#e5e5e5'>\n";
+	print "</HEAD>\n";
+	print "<BODY BGCOLOR=\"#e5e5e5\">\n";
 	print "<H2>Please wait, collecting weather data from NOAA</H2>\n";
 	print "Although this server caches weather for the state of Virginia automatically, other states' data needs to be retreived.\n";
-	print "<HR WIDTH='75%'>\nIf your browser is not currently trying to load the weather data page, <A HREF=\"$MyURL\">try this link.</A>\n";
-	print "<HR WIDTH='75%'>\n<CENTER><FONT SIZE=2><I>Copyright &copy; 1998 Mark Solomon</I></FONT></CENTER>\n";
+	print "<HR WIDTH=\"75%\">\nIf your browser is not currently trying to load the weather data page, <A HREF=\"$MyURL\">try this link.</A>\n";
+	print "<HR WIDTH=\"75%\">\n<CENTER><FONT SIZE=2><I>Copyright &copy; 1998 Mark Solomon</I></FONT></CENTER>\n";
 	print "</BODY>\n</HTML>\n";
 	exit(0);
 }
@@ -74,90 +77,182 @@ elsif ( ! $q->param(REDIR) ) {
 
 my $out;
 
-#$| = 1;
-#print "Content-Type: multipart/x-mixed-replace;boundary=myboundary\n\nmyboundary\n";
-#print $q->start_html(-title=>"Mark's Local Wx for $city, $state",-bgcolor=>'#e5e5e5');
-#print "<H2>Please wait...collecting data</H2>\n\nmyboundary";
-
-%wx = get_forecast($city,$state,30);
+$forecast 	= get_currentWX_html($city,$state,30);
 
 $out = $q->header,"\n";
 $out .= $q->start_html(-title=>"Mark's Local Wx for $city, $state",-bgcolor=>'#e5e5e5');
-$out .=<<ENDTOP;
-<FONT SIZE=1>According to <A HREF='http://www.noaa.gov'>NOAA</A>:</FONT>
-<P>
-<CENTER>
-<TABLE WIDTH=550 CELLPADDING=2 CELLSPACING=1 BORDER=0 BGCOLOR='#000000'><TR><TD>
-<TABLE WIDTH=550 CELLPADDING=5 CELLSPACING=1 BORDER=0 BGCOLOR='#000000'>
+$out .= "<FONT SIZE=1>According to <A HREF=\"http://www.noaa.gov\">NOAA</A>:</FONT>\n";
+$out .= "<P>\n";
+$out .= "<CENTER>\n";
+$out .= "<TABLE WIDTH=$width CELLPADDING=0 CELLSPACING=0 BORDER=0 BGCOLOR=\"#000000\"><TR><TD>\n";
+$out .= "<TABLE WIDTH=$width CELLPADDING=4 CELLSPACING=1 BORDER=0 BGCOLOR=\"#000000\">\n";
+$out .= "<TR><TD $MEDIUM><FONT $MEDIUMTEXT SIZE=\"+2\">Current weather for $city, $state</FONT></TD>\n";
+$out .= "<TR><TD BGCOLOR=\"$GREY\"><FONT $LIGHTTEXT>$forecast</FONT>";
+$out .= "</TD></TR></TABLE>\n";
+$out .= "</TD></TR></TABLE>\n<BR>\n";
 
-<!-- Title bar -->
-<TR>
-	<TD $MEDIUM VALIGN=BOTTOM><FONT $DARKTEXT SIZE=2>Day</TD>
-	<TD $MEDIUM><FONT $MEDIUMTEXT SIZE='+1'>Wx for $city, $state</FONT></TD>
-</TR>
-ENDTOP
-$out .= "<TR>\n\t<TD $LIGHT VALIGN=TOP><FONT $DARKTEXT>Currently</TD>\n";
-$out .= "\t<TD BGCOLOR=\"$GREY\"><FONT $LIGHTTEXT>";
-$out .= get_currentWX_html($city,$state,30);
-$out .= "</FONT></TD>\n</TR>\n";
+
+######
+#
+# Script is fine until here.
+# Let's start rewriting (7/22/98) MS
+#
+######
+
+%wx 		= get_forecast($city,$state,30);
+
+$wx{Date} =~ s/^(\d+)(\d\d)\s(AM|PM)\s(\w+)\s(\w+)\s(\w+)\s0*(\d+)/$1:$2\L$3\E ($4) \u\L$5\E\E \u\L$6 $7,/;
+
+# Pre-process warnings and data items
+###########################################
+@WARNINGS = ();
+@FORECAST = ();
+my @NEAR = split "\n", $wx{NEAR};
+foreach $item (@NEAR) {
+	my ($day,$data) = split(':',$item);
+	if ($data) {
+		push @FORECAST, "$day:$data";
+	}
+	else {
+		push @WARNINGS, $day;
+	}
+}
+
+$out .= run_list('WARNINGS','FORECAST',"Forecast Updated $wx{Date}") if (@NEAR);
+
+@WARNINGS = ();
+@FORECAST = ();
+@EXTENDED = split "\n", $wx{EXTENDED};
+foreach $item (@EXTENDED) {
+	my ($day,$data) = split(':',$item);
+	if ($data) {
+		push @FORECAST, "$day:$data";
+	}
+	else {
+		push @WARNINGS, $day;
+	}
+}
+$out .= run_list('WARNINGS','EXTENDED','Extended Forecast:') if (@EXTENDED);
 
 sub run_list {
-	my ($list,$title) = @_;
-	return if ! $#$list eq 0;
-	
+	my ($warn_list, $forecast_list,$title) = @_;
+	return if ! $#$forecast_list eq 0;
+
+	# De-reference
+	my @WARNINGS = @$warn_list;
+	my @FORECAST = @$forecast_list;
+
+	# print "WARNINGS: @WARNINGS\n"; exit(11);
+
+	# Declare
+	my $retText = '';
+	my ($toprow,$bottomrow);
+	my $cols = $#FORECAST + 1;
+
+	$retText = "<TABLE CELLPADDING=0 CELLSPACING=0 BORDER=0 WIDTH=$width BGCOLOR=\"#000000\"><TR><TD>\n";
+	$retText.= "<TABLE CELLPADDING=4 CELLSPACING=1 BORDER=0 WIDTH=$width BGCOLOR=\"#000000\">\n";
 	if ($title) {
-		$out .= "<TR><!-- Separator/title -->\n";
-		# $out .= "<TD $LIGHT>&nbsp;</TD>\n";
-		$out .= "<TD COLSPAN=2 ALIGN=CENTER BGCOLOR=\"$DARKGREY\" VALIGN=BOTTOM><FONT $LIGHTTEXT SIZE=2>$title</TD></TR>\n";
+		$retText .= "<TR BGCOLOR=\"$DARKGREY\"><!-- Separator/title $warning_flag -->\n";
+		$retText .= "\t<TD COLSPAN=$cols VALIGN=BOTTOM>\n";
+		$retText .= "\t<FONT $LIGHTTEXT SIZE=\"+1\">$title</FONT></TD>\n</TR>\n";
 	}
-	foreach $item (@$list) {
+	foreach $item (@WARNINGS) {
+		$retText .= "\n<!-- Warning -->";
+	      	$retText .= "\n<TR>\n\t<TD BGCOLOR=\"$RED\" COLSPAN=\"$cols\" ALIGN=CENTER>";
+		$retText .= "\n\t<FONT COLOR=\"$DARKRED\">$item</FONT></TD>\n</TR>\n";
+	}
+
+	my $gif;
+	foreach $item (@FORECAST) {
 		my ($day,$data) = split(':',$item);
 		$day or $day = '&nbsp;';
 		$data =~ tr/\r\n//d;
 		$data =~ s/^\s$//;
-		if ($data) {
-			$out .= "<TR>\n\t<TD $LIGHT VALIGN=TOP><FONT $DARKTEXT>$day</TD>\n";
-	        	$out .= "\t<TD BGCOLOR=\"$GREY\"><FONT $LIGHTTEXT>$data</FONT></TD>\n</TR>\n";
+		$gif = 'none.gif';
+		if ($data =~ /thunderstorm/i) {
+			$gif = 'light.gif';
 		}
-		else {
-	        	$out .= "<TR>\n\t<TD BGCOLOR=\"$RED\" COLSPAN=2 ALIGN=CENTER>";
-			$out .= "<FONT COLOR=\"$DARKRED\">$day</TD>\n</TR>\n";
-		}	
+		elsif ($data =~/(rain|drizzle)/i) {
+			$gif = 'rain.gif';
+		}
+		elsif ($data =~/(snow|flurri)/i) {
+			$gif = 'snow.gif';
+		}
+		elsif ($data =~ /mostly cloudy/i) {
+			$gif = 'mocloudy.gif';
+		}
+		elsif ($data =~ /partly cloudy/i) {
+			$gif = 'ptcloudy.gif';
+		}
+		elsif ($data =~ /cloud/i) {
+			$gif = 'cloudy.gif';
+		}
+		elsif ($data =~ /partly sunny/i) {
+			$gif = 'ptcloudy.gif';
+		}
+		elsif ($data =~ /partly sunny/i) {
+			$gif = 'mosunny.gif';
+		}
+		elsif ($data =~ /freez/i) {
+			$gif = 'freeze.gif';
+		}
+		elsif ($data =~ /(sunny|clear)/i) {
+			$gif = 'sunny.gif';
+		}
+		$toprow .= "\n	<TD $LIGHT VALIGN=BOTTOM>\n";
+		$toprow .= "		<TABLE WIDTH=\"100%\" BORDER=0 CELLPADDING=0 CELLSPACING=0>\n";
+		$toprow .= "		<TR><TD><FONT $DARKTEXT><NOBR>$day</NOBR></FONT></TD>\n";
+		$toprow .= "		<TD ALIGN=RIGHT><IMG SRC=\"$gif\" ALT=\"\" WIDTH=36 HEIGHT=20></TD>\n";
+		$toprow .= "		</TR></TABLE>\n";
+		$toprow .= "	</TD>";
+        	$bottomrow .= "\n\t<TD BGCOLOR=\"$GREY\">\n";
+		$bottomrow .= "		<FONT $LIGHTTEXT>$data</FONT>\n\t</TD>";
+
 	}
+	$retText .= "<TR> <!-- Top Row -->$toprow</TR>\n";
+	$retText .= "<TR VALIGN=TOP> <!-- Bottom Row --> $bottomrow</TR>\n";
+	$retText .= "</TABLE> <!-- Inside Table -->\n";
+	$retText .= "</TD></TR></TABLE> <!-- Outside Table -->\n<BR>\n";
+	return $retText;
 } # run_list()
 
-@NEAR = split "\n", $wx{NEAR};
-@EXTENDED = split "\n", $wx{EXTENDED};
-run_list('NEAR',"Forecast: <FONT SIZE=\"-2\">(Updated $wx{Date})</FONT>") if (@NEAR);
-run_list('EXTENDED','Extended Forecast:') if (@EXTENDED);
+
 $wx{Coverage} ||= 'No data available for area requested';
 
+$out .= "<TABLE CELLPADDING=0 CELLSPACING=0 BORDER=0 WIDTH=$width BGCOLOR=\"#000000\"><TR><TD>\n";
+$out .= "<TABLE CELLPADDING=4 CELLSPACING=1 BORDER=0 WIDTH=$width BGCOLOR=\"#000000\">\n";
 $out .= <<ENDBOTTOM;
 <TR VALIGN=TOP>
-	<TD $LIGHT><FONT $DARKTEXT SIZE=2>Area</TD>
-	<TD BGCOLOR="$GREY"><FONT $DARKTEXT SIZE=1>$wx{Coverage}</TD>
+	<TD $LIGHT><FONT $DARKTEXT SIZE=2>Area</FONT></TD>
+	<TD BGCOLOR="$GREY"><FONT $DARKTEXT SIZE=1>$wx{Coverage}</FONT></TD>
 </TR>
 <TR VALIGN=TOP $MEDIUM>
-	<TD><FONT SIZE=2>Credits:</TD>
-	<TD BGCOLOR="$DARKGREY"><FONT SIZE=1>$ME - by <A HREF="mailto:msolomon\@seva.net">Mark Solomon</A><BR>
-		Data retrieved from <A HREF="$wx{URL}">$wx{URL}</A> and processed by <A HREF="http://www.seva.net/~msolomon/wx/dist/">this perl script.</A></TD>
+	<TD><FONT SIZE=2>Credits:</FONT></TD>
+	<TD BGCOLOR="$DARKGREY"><FONT SIZE=1>$ME, Geo::WeatherNOAA $Geo::WeatherNOAA::VERSION - by <A HREF="mailto:msolomon\@seva.net">Mark Solomon</A><BR>
+		Data retrieved from <A HREF="$wx{URL}">$wx{URL}</A> and processed by <A HREF="http://www.seva.net/~msolomon/wx/dist/">this perl script.</A></FONT></TD>
 </TR>
-</TD></TR></TABLE>
-</TD></TR></TABLE>
+</TABLE>
 </TD></TR></TABLE>
 
 <FONT $LIGHTTEXT SIZE=2>
-<FORM METHOD=POST>
-	New City <INPUT NAME='city' SIZE=20 VALUE="$city">
-	State <INPUT SIZE=3 MAXLENGTH=2 NAME='state' TYPE=text VALUE="$state">
-	<INPUT TYPE=SUBMIT VALUE='Get Wx'>
+<FORM METHOD=POST ACTION=\"$self\">
+	New City <INPUT NAME=\"city\" SIZE=20 VALUE="$city">
+	State <INPUT SIZE=3 MAXLENGTH=2 NAME=\"state\" TYPE=text VALUE="$state">
+	<INPUT TYPE=SUBMIT VALUE=\"Get Wx\">
 </FORM>
-Also note that I've made a much <A HREF="front/">snazzier version of this page</A>, if that's your taste.
-<HR WIDTH="550" NOSHADE>
+<A HREF="./wx.cgi?city=outer+banks&state=nc">Outer Banks, NC</A> | 
+<A HREF="./wx.cgi?city=new+york&state=ny">New York,NY</A> | 
+<A HREF="./wx.cgi?city=boston&state=ma">Boston, MA</A> |
+<A HREF="./wx.cgi?city=dover&state=de">Dover, DE</A> |
+<A HREF="./wx.cgi?city=chicago&state=il">Chicago, IL</A>
 </FONT>
+<HR WIDTH="$width" NOSHADE>
 <FONT SIZE=2><I>&copy; 1998 Mark Solomon</I></FONT>
 </CENTER>
+</BODY>
+</HTML>
 ENDBOTTOM
+# Also note that I've made a much <A HREF="front/">snazzier version of this page</A>, if that's your taste.
 
 print $out . "\n"; 
 exit(0);

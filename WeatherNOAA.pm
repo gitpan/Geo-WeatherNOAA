@@ -2,7 +2,7 @@
 # Geo::WeatherNOAA.pm (Weather Module)
 # Mark Solomon <msolomon@seva.net> 
 # Started 3/2/98
-# $Id: WeatherNOAA.pm,v 3.4 1998/03/21 23:44:20 msolomon Exp msolomon $
+# $Id: WeatherNOAA.pm,v 3.6 1998/07/22 19:29:08 msolomon Exp msolomon $
 # $Name:  $
 # Copyright 1998 Mark Solomon (See GNU GPL)
 #
@@ -29,11 +29,11 @@ require Exporter;
 
 
 # Preloaded methods go here.
-$VERSION = do { my @r = (q$Revision: 3.4 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 3.6 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 sub states {
-	return (qw/al ak az ar ca co ct de fl ga hi id il in ia ks ky la me md ma mi mn ms mo nt ne nh nj nm ny nc nd oh ok or pa pr ri sc sd tn tx ut vt va wa wv wi wy/);
+	return (qw/al ak az ar ca co ct de fl ga hi id il in ia ks ky la me md ma mi mn ms mo nt ne nh nj nm nv ny nc nd oh ok or pa pr ri sc sd tn tx ut vt va wa wv wi wy/);
 }
 
 sub First_caps {
@@ -108,7 +108,7 @@ sub get_forecast {
 		$type = 'NEAR';
 	    }
 	}
-	elsif ( /^\.EXTENDED FORECAST\./ ) {
+	elsif ( /FORECAST\.\.\.$/ ) {
 	    $type = 'EXTENDED';
 	}
 	elsif ( $type =~ /(NEAR|EXTENDED)/ ) {
