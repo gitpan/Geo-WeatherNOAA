@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.34 2000/01/03 14:08:42 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.35 2000/01/03 14:19:45 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,7 +30,7 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.34 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.35 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
@@ -147,7 +147,7 @@ sub process_city_zone {
 	}
 
 	foreach my $key ( keys %forecast ) {
-		$forecast{$key} =~ tr/\n//d;			# Remove newlines
+		$forecast{$key} =~ tr/\012//d;			# Remove newlines
 		#$forecast{$key} = lc($forecast{$key});	# No all CAPS
 		$forecast{$key} =~ s/\s+/ /g;			# Rid of multi-spaces
 		$forecast{$key} = sent_caps($forecast{$key});	# Proper sentance caps
@@ -191,7 +191,7 @@ sub get_city_zone {
 		# Iterate though section and get coverage
 		my $coverage_ended = 0;
 		foreach my $line (split /\012/, $section) {
-			$line =~ tr/\r//d;
+			$line =~ tr/\015//d; # \r
 			$coverage .= $line . "\n" if (! $coverage_ended);
 			if ($line !~ /^\w/) {
 				$coverage_ended = 1;
@@ -354,7 +354,7 @@ sub get_data {
 sub format_date {
 	my $in = shift;
 	$in =~ s/^(\d+)(\d\d)\s(AM|PM)\s(\w+)\s(\w+)\s(\w+)\s0*(\d+)/$1:$2\L$3\E ($4) \u\L$5\E\E \u\L$6 $7,/;
-	$in =~ tr/\r//d;
+	$in =~ tr/\015//d; # \r
 	return $in;
 }
 sub sent_caps {
@@ -402,11 +402,11 @@ sub get_city_hourly {
 		return \%retHash;
 	}
 
-	$data =~ s/\r//g;
+	$data =~ s/\015//g; # \r
 
 	# Get line for our city from Data
 	#
-	foreach (split /\n/, $data) {
+	foreach (split /\012/, $data) {
 		chomp;
 		$date   = $_ if /^\s*(\d+)(\d\d)\s+(AM|PM)\s+(\w+)/;
 		$time = "$1:$2 $3" if (($1) && ($2) && ($3));

@@ -1,4 +1,6 @@
-Mon Jan  3 14:08:42 2000  msolomon  <msolomon@fido.seva.net>
+Mon Jan  3 14:19:45 2000  msolomon  <msolomon@fido.seva.net>
+
+	* WeatherNOAA.pm: Change backslash-[nr] to octal equiv
 
 	* WeatherNOAA.pm:
 	Allowed for new current conditions format; Changed minor text output
