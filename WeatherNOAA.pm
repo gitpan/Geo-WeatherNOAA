@@ -2,7 +2,7 @@
 # Geo::WeatherNOAA.pm (Weather Module)
 # Mark Solomon <msolomon@seva.net> 
 # Started 3/2/98
-# $Id: WeatherNOAA.pm,v 3.8 1998/08/27 20:11:04 msolomon Exp msolomon $
+# $Id: WeatherNOAA.pm,v 3.9 1998/09/03 16:25:22 msolomon Exp $
 # $Name:  $
 # Copyright 1998 Mark Solomon (See GNU GPL)
 #
@@ -10,6 +10,7 @@
 package Geo::WeatherNOAA;
 
 use LWP::Simple;
+use LWP::UserAgent;
 use Text::Wrap;
 use strict;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
@@ -29,7 +30,7 @@ require Exporter;
 
 
 # Preloaded methods go here.
-$VERSION = do { my @r = (q$Revision: 3.8 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 3.9 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 sub states {
@@ -51,9 +52,32 @@ sub First_caps_sent {
     return $$in;
 } # First_caps_sent()
 
+sub getURL {
+    Usgae("Bad args to getURL()") if (@_ lt 2);
+    my ($URL, $UA) = @_;
+
+    # Create the useragent and get the data
+    #
+    if (! $UA) {
+	$UA = new LWP::UserAgent;
+    }
+    $UA->agent("Geo-WeatherNOAA/$VERSION");
+    
+    # Create a request
+    # print STDERR "Getting forecast from $URL\n";
+    my $req = new HTTP::Request GET => $URL;
+    my $res = $UA->request($req);
+    if ($res->is_success) {	
+	return $res->content;
+    }
+    else {
+	Usage("Cannot get Wx Data at $URL");
+    }
+} # getURL()    
+
 sub get_forecast {
     Usage("Bad Arguments") if (@_ lt 2);
-    my ($CITY,$STATE,$CACHE,$CACHEDIR) = @_;
+    my ($CITY,$STATE,$CACHE,$CACHEDIR,$UA) = @_;
 
     $CITY = uc($CITY);
     ($STATE) = ($STATE =~ /^(\w\w)/);  # Untaint
@@ -63,13 +87,13 @@ sub get_forecast {
     
     my $URL = lc($URL_BASE . "$STATE/zone.html");
     $retValue{URL} = $URL;
-    
+
     my $RAW_DATA;
-    if (! $CACHE) {
-	$RAW_DATA  = get($URL) || Usage("Cannot get Wx Data at $URL");
+    if ($CACHE) {
+	$RAW_DATA  = get_cache($STATE,'zone',$CACHE,$CACHEDIR,$UA);
     }
     else {
-	$RAW_DATA  = get_cache($STATE,'zone',$CACHE,$CACHEDIR) || Usage("Cannot retrieve cached zone data for $STATE");
+	$RAW_DATA = getURL($URL, $UA);
     }
     
     $RAW_DATA =~ tr/\r//d;
@@ -181,7 +205,7 @@ sub print_forecast {
 
 sub get_currentWX {
     Usage("Bad Arguments") if (@_ lt 2);
-    my ($CITY,$STATE,$CACHE,$CACHEDIR) = @_;
+    my ($CITY,$STATE,$CACHE,$CACHEDIR,$UA) = @_;
     $CITY = uc($CITY);
     ($STATE) = ($STATE =~ /^(\w\w)/);  # Untaint
     $STATE = uc($STATE);
@@ -191,10 +215,11 @@ sub get_currentWX {
     
     my $RAW_DATA;
     if (! $CACHE) {
-	$RAW_DATA = get($URL) || Usage("Cannot get current wx data at $URL");
+	$RAW_DATA = getURL($URL,$UA) || 
+	    Usage("Cannot get current wx data at $URL");
     }
     else {
-	$RAW_DATA = get_cache($STATE,'hourly',$CACHE,$CACHEDIR);
+	$RAW_DATA = get_cache($STATE,'hourly',$CACHE,$CACHEDIR,$UA);
     }
     $RAW_DATA =~ tr/\r//d;
     my @RAW_DATA = split /\n/, $RAW_DATA;
@@ -312,8 +337,10 @@ sub get_currentWX_html {
 
 sub Usage {
     my ($in) = @_;
-    print STDOUT "Content-type:text/plain\n\nERROR: $in Geo::WeatherNOAA v$Geo::WeatherNOAA::VERSION\n";
-    exit(1);
+    my $errmsg = "ERROR: $in Geo::WeatherNOAA v$VERSION";
+    print STDOUT "Content-type:text/plain\n\n" . $errmsg . "\n";
+    # exit(1);
+    die("$errmsg");
     
 } # Usage()
 
@@ -329,6 +356,7 @@ sub get_cache {
     my $CACHE = shift;
     my $DIR = shift;
     $DIR or $DIR = '/tmp/wxdata';
+    my $UA = shift;
     my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
     my $URL = $URL_BASE . "${STATE}/${TYPE}.html";
     my $FILE = "$DIR/$STATE\_$TYPE\.html";
@@ -346,7 +374,8 @@ sub get_cache {
     if ( ($nowfile - $testfile) > (60 * $CACHE)) {
 	open(CACHE,">$FILE") or Usage("Cannot create $FILE: $!");
 	# print STDERR "GETTING NEW DATA\n";
-	my $DATA = get($URL);
+	#my $DATA = get($URL);
+	my $DATA = getURL($URL,$UA);
 	print CACHE $DATA;
 	close CACHE;
 	return $DATA;
@@ -413,7 +442,7 @@ use to hold the weather data cache.
 
 =item * 
 
-get_forecast(CITY,STATE,CACHE,CACHEDIR)
+get_forecast(CITY,STATE,CACHE,CACHEDIR,LWP_UserAgent)
 
 Call with at least to tokens: City and State (Two letter abbr)
 
@@ -426,7 +455,15 @@ the first 'hit' would have to wait for the remote data.
 The fourth argument is the directory in which to cache the data.
 If omitted, the module will use B<C</tmp/wxdata>>
 
-Returns a hash with the following keys:
+The fifth argument is for a user created LWP::UserAgent(3) which
+can be configured to work with firewalls. See the LWP::UserAgent(3)
+manpage for specific instructions. A basic example is like this:
+
+    my $ua = new LWP::UserAgent;
+    $ua->proxy(['http', 'ftp'], 'http://proxy.my.net:8080/');
+
+
+This function returns a hash with the following keys:
 
   Coverage 	=> A list of the affected areas for the forecast
   Date 		=> Date/time when the data was reported to NOAA
@@ -498,7 +535,7 @@ Its output looks like this:
 
 =item * 
 
-get_currentWX(CITY,STATE,CACHE,CACHEDIR)
+get_currentWX(CITY,STATE,CACHE,CACHEDIR,LWP_UserAgent)
 
 Call with at least to tokens: City and State (Two letter abbr)
 
@@ -511,7 +548,14 @@ the first 'hit' would have to wait for the remote data.
 The fourth argument is the directory in which to cache the data.
 If omitted, the module will use B<C</tmp/wxdata>>
 
-Returns a hash with the following keys:
+The fifth argument is for a user created LWP::UserAgent(3) which
+can be configured to work with firewalls. See the LWP::UserAgent(3)
+manpage for specific instructions. A basic example is like this:
+
+    my $ua = new LWP::UserAgent;
+    $ua->proxy(['http', 'ftp'], 'http://proxy.my.net:8080/');
+
+This function returns a hash with the following keys:
 
   CITY		=> Name of reported city
   SKY/WX	=> Sky conditions
@@ -534,7 +578,7 @@ The third token, if used will tell the module to use the
 	I figured this would be usefull to a web server where only
 	the first 'hit' would have to wait for the remote data.
 
-This call returns a scalar containing a (sort-of) html'ized english
+This call returns a scalar containing a (sort-of) htmlized english
 sentence describing the weather in the requested city.
 
   use Geo::WeatherNOAA;
@@ -558,7 +602,7 @@ http://www.seva.net/~msolomon/wx/
 
 =head1 SEE ALSO
 
-perl(1).
+perl(1), LWP(3), LWP::UserAgent(3).
 
 =cut
 
