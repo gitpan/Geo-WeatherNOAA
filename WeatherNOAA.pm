@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.32 1999/04/01 22:21:03 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.33 1999/04/06 14:03:18 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,7 +30,7 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.32 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.33 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
@@ -137,6 +137,7 @@ sub process_city_zone {
 			else {
 				# Add KEY (with data) to OLD KEY (FORECAST_ITEM)
 				$forecast{$forecast_item} .= ' ' . $key;
+				$forecast{$forecast_item} .= ', ' . $value if $value;
 			}
 		}
 		elsif ( (!$key) && ($value) ) {
