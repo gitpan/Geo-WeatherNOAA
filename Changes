@@ -1,3 +1,10 @@
+Tue Feb 16 05:27:48 1999  msolomon  <msolomon@fido.seva.net>
+
+	* WeatherNOAA.pm:
+	Inside get_city_zone(), when looking for correct data section, also
+	look for four digits which is the year which is always in the date line of
+	the section.  Without this date, we'll consider the forecast invalid.  Any help?
+
 Thu Feb 11 19:26:02 1999  msolomon  <msolomon@fido.seva.net>
 
 	* WeatherNOAA.pm, Makefile.PL, README:

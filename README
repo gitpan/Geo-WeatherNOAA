@@ -16,7 +16,7 @@ http://fido.seva.net:8090/mailman/listinfo/weathernoaa for info to join
 
 A quick example to get a current weather in Boston, MA is as simple as:
 
-	use WeatherNOAA;
+	use Geo::WeatherNOAA;
 	print print_current('BOSTON','MA');
  
 Would result with:

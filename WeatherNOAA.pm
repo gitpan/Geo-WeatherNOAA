@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.25 1999/02/11 19:26:02 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.26 1999/02/16 05:27:48 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,7 +30,7 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.25 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.26 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
@@ -153,6 +153,7 @@ sub process_city_zone {
 
 } # process_city_zone()
 
+
 sub get_city_zone {
 	my ($city, $state, $filename, $fileopt, $UA) = @_;
 
@@ -191,7 +192,7 @@ sub get_city_zone {
 				$coverage_ended = 1;
 			} 
 		}
-		return $section if ($coverage =~ /$city/i);
+		return $section if ( ($coverage =~ /$city/i) && ($section =~ /\d{4}/));
 	}
 	return "$city not found";
 }
