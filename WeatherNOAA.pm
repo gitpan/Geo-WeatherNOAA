@@ -2,7 +2,7 @@
 # Geo::WeatherNOAA.pm (Weather Module)
 # Mark Solomon <msolomon@seva.net> 
 # Started 3/2/98
-# $Id: WeatherNOAA.pm,v 3.6 1998/07/22 19:29:08 msolomon Exp msolomon $
+# $Id: WeatherNOAA.pm,v 3.8 1998/08/27 20:11:04 msolomon Exp msolomon $
 # $Name:  $
 # Copyright 1998 Mark Solomon (See GNU GPL)
 #
@@ -29,11 +29,11 @@ require Exporter;
 
 
 # Preloaded methods go here.
-$VERSION = do { my @r = (q$Revision: 3.6 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 3.8 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 sub states {
-	return (qw/al ak az ar ca co ct de fl ga hi id il in ia ks ky la me md ma mi mn ms mo nt ne nh nj nm nv ny nc nd oh ok or pa pr ri sc sd tn tx ut vt va wa wv wi wy/);
+	return (qw/al ak az ar ca co ct de fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nh nj nm nv ny nc nd oh ok or pa pr ri sc sd tn tx ut vt va wa wv wi wy/);
 }
 
 sub First_caps {
@@ -78,7 +78,8 @@ sub get_forecast {
     #
     my $START_ZONE = "\U${STATE}Z";
     my @RAW_DATA = (); 
-    while ( $RAW_DATA =~ /$START_ZONE(.*?)\$\$/gs ) {
+    #while ( $RAW_DATA =~ /$START_ZONE(.*?)\$\$/gs ) {
+	while ( $RAW_DATA =~ /$START_ZONE(.*?)(\$\$|NNNN)/gs ) {
 	my $data = $1;
 	# This next line removes confusing NWS Station ID
 	$data =~ s#\nNATIONAL\sWEATHER\sSERVICE.*?\n#\n#gs;
@@ -108,7 +109,7 @@ sub get_forecast {
 		$type = 'NEAR';
 	    }
 	}
-	elsif ( /FORECAST\.\.\.$/ ) {
+	elsif ( ( /FORECAST\.\.\.$/ ) || (/EXTENDED FORECAST/) ) {
 	    $type = 'EXTENDED';
 	}
 	elsif ( $type =~ /(NEAR|EXTENDED)/ ) {

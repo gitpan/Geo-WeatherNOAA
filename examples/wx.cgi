@@ -5,7 +5,7 @@
 #
 #	3/2/98 Mark Solomon <msolomon@seva.net>
 #	Copyright 1998 Mark Solomon (See GNU GPL)
-#	$Id: wx.cgi,v 3.11 1998/07/22 19:32:18 msolomon Exp msolomon $
+#	$Id: wx.cgi,v 3.12 1998/08/27 20:11:44 msolomon Exp msolomon $
 #	$Name:  $
 #
 
@@ -19,7 +19,7 @@ BEGIN {
 }
 
 
-my $VERSION = do { my @r = (q$Revision: 3.11 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+my $VERSION = do { my @r = (q$Revision: 3.12 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $ME = ( split('/',$0) )[-1] . " $VERSION";
 
 my $q = new CGI;
@@ -77,7 +77,7 @@ elsif ( ! $q->param(REDIR) ) {
 
 my $out;
 
-$forecast 	= get_currentWX_html($city,$state,30);
+$forecast 	= get_currentWX_html($city,$state);
 
 $out = $q->header,"\n";
 $out .= $q->start_html(-title=>"Mark's Local Wx for $city, $state",-bgcolor=>'#e5e5e5');
@@ -99,7 +99,7 @@ $out .= "</TD></TR></TABLE>\n<BR>\n";
 #
 ######
 
-%wx 		= get_forecast($city,$state,30);
+%wx 		= get_forecast($city,$state);
 
 $wx{Date} =~ s/^(\d+)(\d\d)\s(AM|PM)\s(\w+)\s(\w+)\s(\w+)\s0*(\d+)/$1:$2\L$3\E ($4) \u\L$5\E\E \u\L$6 $7,/;
 

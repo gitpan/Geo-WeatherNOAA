@@ -21,7 +21,7 @@ Would result with:
 Requirements:
 -------------
 	perl 5.004 (or at least Text::Wrap)
-	LWP::Simple
+	LWP (libwww-perl)
 
 
 To install:
