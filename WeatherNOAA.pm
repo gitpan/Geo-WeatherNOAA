@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.36 2002/01/30 18:53:39 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.37 2002/01/30 21:58:11 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,7 +30,7 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.36 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.37 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
@@ -143,9 +143,15 @@ sub process_city_zone {
 				# print "LINE IGNORED\n";
 			}
 		}
-		elsif ( (!$key) and ($value) ) {
-			$value = ucfirst lc $value;
-			push @warnings, $value;
+		elsif (! $warnings_done ) {                                     
+			if ( (!$key) and ($value) ) {                           
+					$value = ucfirst lc $value;                     
+					push @warnings, $value;                         
+			}                                                       
+			elsif ( ($key) and (!$value) ) {                        
+					$key = ucfirst lc $key;                         
+					push @warnings, $key;                           
+			}
 		}
 		else {
 			# line ignored
