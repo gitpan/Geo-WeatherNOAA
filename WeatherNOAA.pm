@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.28 1999/02/22 15:01:00 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.29 1999/02/26 16:11:44 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,7 +30,7 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.28 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.29 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
@@ -69,7 +69,7 @@ sub print_forecast {
 #########################################################################
 sub process_city_zone {
 	my ($city, $state, $filename, $fileopt, $UA) = @_;
-	my $in = get_city_zone($city,$state,$filename,$fileopt);
+	my $in = get_city_zone($city,$state,$filename,$fileopt,$UA);
 
 	# Return error if problem getting URL
 	if ($in =~ /Error/) {
@@ -171,7 +171,7 @@ sub get_city_zone {
 
 	# Get data from filehandle object
 	#
-	$rawData = get_data($URL,$filename,$fileopt);
+	$rawData = get_data($URL,$filename,$fileopt,$UA);
 
 	# Return error if there's an error
 	if ($rawData =~ /Error/) {

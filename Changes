@@ -1,3 +1,7 @@
+Fri Feb 26 16:11:44 1999  msolomon  <msolomon@fido.seva.net>
+
+	* WeatherNOAA.pm, t.pl: Per Pat Ludwig, fixed the proxy bug
+
 Mon Feb 22 15:01:00 1999  msolomon  <msolomon@fido.seva.net>
 
 	* WeatherNOAA.pm:
