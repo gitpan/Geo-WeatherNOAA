@@ -1,3 +1,13 @@
+Thu Apr  1 22:21:03 1999  msolomon  <msolomon@fido.seva.net>
+
+	* WeatherNOAA.pm: Inside get_city_zone() we're no longer looking for
+	  the state's first letters then a Z, now just \012\w\wZ
+	  this seems to work.  Good ol' regex's
+
+Wed Mar 17 14:14:53 1999  msolomon  <msolomon@fido.seva.net>
+
+	* WeatherNOAA.pm: Skip .< temp data
+
 Fri Feb 26 16:41:48 1999  msolomon  <msolomon@fido.seva.net>
 
 	* t.pl, WeatherNOAA.pm:

@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.30 1999/02/26 16:41:47 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.32 1999/04/01 22:21:03 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,7 +30,7 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.30 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.32 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
@@ -109,6 +109,9 @@ sub process_city_zone {
 	my $warnings_done = 0;	# Flag for warnings (Always at top of forcast)
 
 	foreach my $line (split "\012",$forecast) {
+		# Be-gone if we've got temp data (will include parse for that later)
+		last if $line =~ /^\.</;
+
 		my ($key,$value);
 		($key,$value) = ($line =~ /(.*?)\.\.\.(.*)/);
 
@@ -180,7 +183,8 @@ sub get_city_zone {
 
 	# Find our city's data from all raw data
 	#
-	foreach my $section ($rawData =~ /\012${state}Z.*?	# StateZone
+	#foreach my $section ($rawData =~ /\012${state}Z.*?	# StateZone
+	foreach my $section ($rawData =~ /\012\w\wZ.*?	# StateZone
 					  \012(.*?)		# Data sect
 					  \012(?:\$\$|NNN)/xsg) {
 		# Iterate though section and get coverage
