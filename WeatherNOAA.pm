@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.35 2000/01/03 14:19:45 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.36 2002/01/30 18:53:39 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,7 +30,7 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.35 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.36 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
@@ -123,26 +123,32 @@ sub process_city_zone {
 		next if ($key =~ /EXTENDED/);
 
 
-		$warnings_done = 1 if ( ($key) && ($value) );
-		#print "\n\nWARN_DONE: $warnings_done\n";
+		$warnings_done = 1 if ( ($key) and ($value) );
+		#print "WARN_DONE: $warnings_done\n";
 
 		if ($warnings_done) {
-			if ( ($key =~ s/^\.//) && ($value) && ($key) ) {
+			if ( ($key =~ s/^\.//) and ($value) and ($key) ) {
 				# Add VALUE to KEY (new key)
 				$key =~ s/^\.//;
 				$key = ucfirst_words($key);
 				$forecast_item = $key;
 				$forecast{$forecast_item} .= $value;
 			}
-			else {
+			elsif ( $forecast_item ) {
 				# Add KEY (with data) to OLD KEY (FORECAST_ITEM)
 				$forecast{$forecast_item} .= ' ' . $key;
 				$forecast{$forecast_item} .= ', ' . $value if $value;
 			}
+			else {
+				# print "LINE IGNORED\n";
+			}
 		}
-		elsif ( (!$key) && ($value) ) {
+		elsif ( (!$key) and ($value) ) {
 			$value = ucfirst lc $value;
 			push @warnings, $value;
+		}
+		else {
+			# line ignored
 		}
 	}
 
@@ -222,7 +228,7 @@ sub make_noaa_table {
 
 	$fileopt ||= 'get';
 	$max_items && $max_items--;
-	$max_items ||= 5;
+	$max_items ||= 4;
 	
 	my $med_bg   = $main::med_bg || '#ddddff';
 	my $light_bg = $main::light_bg || '#eeeeff';
