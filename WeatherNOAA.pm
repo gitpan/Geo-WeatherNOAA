@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.29 1999/02/26 16:11:44 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.30 1999/02/26 16:41:47 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,7 +30,7 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.29 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.30 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
@@ -418,10 +418,10 @@ sub get_city_hourly {
 
 	my @fields;
 	push @fields, 'DATE', 'TIME', unpack
-                '@0 A15 @15 A9 @24 A5 @29 A5 @35 A4 @39 A8 @47 A8 @55 A8', $fields if $fields;
+        '@0 A15 @15 A9 @24 A5 @29 A5 @35 A4 @39 A8 @47 A8 @55 A8', $fields if $fields;
 	my @values;
 	push @values, $date, $time, unpack 
-		'@0 A15 @15 A9 @24 A5 @29 A5 @35 A4 @39 A8 @47 A8 @55 A8', $line;
+		'@0 A15 @15 A9 @24 A5 @29 A5 @34 A4 @39 A8 @47 A8 @55 A8', $line;
 	return { } if $values[3] eq 'NOT AVBL'; # Return ref to empty hash
 
 	my %retValue;
