@@ -1,0 +1,17 @@
+
+RCS file: RCS/WeatherNOAA.pm,v
+Working file: WeatherNOAA.pm
+head: 3.1
+branch:
+locks: strict
+	msolomon: 3.1
+access list:
+keyword substitution: kv
+total revisions: 1;	selected revisions: 1
+description:
+Geo::WeatherNOAA
+----------------------------
+revision 3.1	locked by: msolomon;
+date: 1998/03/14 18:23:40;  author: msolomon;  state: Exp;
+Name change to Geo::Weather
+=============================================================================

@@ -1,0 +1,28 @@
+Hello, I'm using WX v2.08
+
+Forecast for NEW YORK, NY
+WARNING: The national weather service has issued a flood watch for late
+    tonight through monday
+    
+WARNING: A wind advisory has also been posted for very late tonight through
+    monday... 
+    
+Tonight: Rainy and windy. The rain may become heavy at times after midnight
+    with a chance of a thunderstorm well after midnight. Low around 40 then
+    rising slightly. Wind east 20 to 25 mph and gusty becoming southeast 25
+    to 35 mph with gusts 45 to near 50 mph toward daybreak. Chance of rain
+    near 100 percent.
+    
+Monday: Rain early on along with a chance of thunderstorms...Giving way to
+    scattered showers and possibly another thunderstorm. The rain may
+    become heavy at times early on and again with any thunderstorms.
+    Continued windy. High 55 to 60. Wind southeast 25 to 35 mph with gusts
+    45 to near 50 mph...Becoming south by mid morning and southwest during
+    the afternoon with speeds diminishing somewhat. Chance of rain near 100
+    percent.
+    
+Monday night: Chance of showers and a thunderstorm early on...Then variably
+    cloudy and brisk. Low near 40. Chance of showers 30 percent.
+    
+Tuesday: Partly cloudy and continued brisk. High in the upper 40s.
+    
