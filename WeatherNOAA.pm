@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.26 1999/02/16 05:27:48 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.27 1999/02/17 17:39:44 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,7 +30,7 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.26 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.27 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
@@ -89,7 +89,7 @@ sub process_city_zone {
 	# Format Coverage
 	#
 	$coverage =~ s/corrected//gi;		# Remove stat word
-	$coverage =~ s/(\/|-|\.\.\.)/,/g;	# Turn weird punct to commas
+	$coverage =~ s/(\/|-|\.\.\.)/, /g;	# Turn weird punct to commas
 	$coverage =~ s/,\s*$//;			# Remove last comma
 	$coverage = ucfirst_words($coverage);	# Make caps correct
 	
@@ -149,7 +149,7 @@ sub process_city_zone {
 		$forecast{$key} = sent_caps($forecast{$key});	# Proper sentance caps
 	}
 
-	return ($date,\@warnings,\%forecast);
+	return ($date,\@warnings,\%forecast,$coverage);
 
 } # process_city_zone()
 
@@ -205,10 +205,11 @@ sub get_city_zone {
 ##############################################################################
 ##############################################################################
 
-sub font2 {
+sub font {
 	my $in = shift;
+	my $size = shift || 2;
 	my $font_face = $main::font_face || 'FACE="Helvetica, Lucida, Ariel"';
-	return qq|<FONT SIZE="2" $font_face>$in</FONT>|;
+	return qq|<FONT SIZE="$size" $font_face>$in</FONT>|;
 }
 
 sub make_noaa_table {
@@ -227,16 +228,16 @@ sub make_noaa_table {
 	my $current = process_city_hourly( $city,$state,$locfilename,$fileopt,$UA );
 		
 	$locfilename = $filename . "_zone";
-	my ($date,$warnings,$forecast) = process_city_zone( $city,$state,$locfilename,$fileopt,$UA);
+	my ($date,$warnings,$forecast,$coverage) = process_city_zone( $city,$state,$locfilename,$fileopt,$UA);
 	my $cols = (keys %$forecast);
 	$cols = $max_items if $cols > $max_items;
 	my $out;
 	$out .= qq|<TABLE WIDTH="100%" CELLPADDING=1>\n|;
 	$out .= qq|<!-- Current weather row -->\n|;
 	$out .= qq|<TR VALIGN=TOP><TD BGCOLOR="$med_bg">\n|;
-	$out .= font2('Current') . "\n</TD>\n";
+	$out .= font('Current') . "\n</TD>\n";
 	$out .= qq|<TD COLSPAN="$cols">|;
-	$out .= font2($current) . "\n</TD></TR>\n";
+	$out .= font($current) . "\n</TD></TR>\n";
 
 	# Add one to make cols real width of table
 	#
@@ -261,11 +262,17 @@ sub make_noaa_table {
 	$bottom .= qq|<TR VALIGN="TOP">\n|;
 	foreach my $key ( (keys %$forecast)[0..($cols - 1)] ) {
 		#print STDERR "DEBUG: $key\n";
-		$out    .= "\t<TD>" . font2($key) . "</TD>\n";
-		$bottom .= "\t<TD>" . font2($forecast->{$key}) . "</TD>\n";
+		$out    .= "\t<TD>" . font($key) . "</TD>\n";
+		$bottom .= "\t<TD>" . font($forecast->{$key}) . "</TD>\n";
 	}
 	$out .= "</TR>\n" . $bottom . "</TR>\n";
 	
+	# Add coverage area
+	$out .= qq|<TR BGCOLOR="$light_bg" ALIGN="LEFT">\n|;
+	$out .= qq|	<TD>| . font('Area') . qq|</TD>\n|;
+	$out .= qq|	<TD COLSPAN="$cols">| . font($coverage,1) . qq|</TD>\n|;
+	$out .= qq|</TR>\n|;
+
 	# Add credits
 	#
 	my $wx_cred = '<A HREF="http://www.noaa.gov">NOAA</A> forecast made ' .
@@ -273,7 +280,7 @@ sub make_noaa_table {
 	  "<A HREF=\"http://www.seva.net/~msolomon/WeatherNOAA/dist/\">" .
 	  "Geo::WeatherNOAA</A> V.$Geo::WeatherNOAA::VERSION";
 	$out .= qq|<TR BGCOLOR="$light_bg" ALIGN="CENTER">\n|;
-	$out .= qq|<TD COLSPAN="$cols">| . font2($wx_cred) . "</TD></TR>\n";
+	$out .= qq|<TD COLSPAN="$cols">| . font($wx_cred) . "</TD></TR>\n";
 	$out .= qq|</TABLE>\n|;
 
 
@@ -518,7 +525,7 @@ Geo::WeatherNOAA - Perl extension for interpreting the NOAA weather data
 =head1 SYNOPSIS
 
   use Geo::WeatherNOAA;
-  ($date,$warnings,$forecast) = 
+  ($date,$warnings,$forecast,$coverage) = 
      process_city_zone('newport','ri','','get');
 
   foreach $key (keys %$forecast) {
@@ -537,6 +544,10 @@ or
 This module is intended to interpret the NOAA zone forecasts and current
 city hourly data files.  It should give a programmer an easy time to use the
 data instead of having to mine it.
+
+Be aware that if the variable $main::opt_v is set to anything (other than
+zero or '') then Geo::WeatherNOAA will be verbose  on what it's doing with
+messages sent to STDERR.  Useful for debugging.
 
 =head1 REQUIRES
 
@@ -610,7 +621,7 @@ The return is a three element list containing a) a string of the date/time
 of the forecast, b) a reference to the list of warnings (if any), and
 c) a reference to the hash of forecast.  I recommend calling it like this:
 
-    ($date, $warnings, $forecast) = 
+    ($date, $warnings, $forecast, $coverage) = 
         process_city_zone('newport news','va',
 	'/tmp/va_zone.html', 'save');
 
@@ -631,6 +642,8 @@ Explanation of this call, it returns:
 	  	print "$key: $forecast->{$key}\n";
 	  }
 
+	$coverage
+	- Scalar of the coverage area of the forecast
 
 
 =item * get_city_zone(CITY,STATE,FILENAME,FILEOPT,LWP_UserAgent)

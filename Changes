@@ -1,3 +1,11 @@
+Wed Feb 17 17:39:44 1999  msolomon  <msolomon@fido.seva.net>
+
+	* WeatherNOAA.pm: Added return of Coverage area in process_city_zone()
+	Added coverage table row to make_noaa_table()
+	Added doc about opt_v
+
+	* README: Added Geo::
+
 Tue Feb 16 05:27:48 1999  msolomon  <msolomon@fido.seva.net>
 
 	* WeatherNOAA.pm:
