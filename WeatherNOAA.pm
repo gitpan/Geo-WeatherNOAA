@@ -2,7 +2,7 @@
 # Geo::WeatherNOAA.pm (Weather Module)
 # Mark Solomon <msolomon@seva.net> 
 # Started 3/2/98
-# $Id: WeatherNOAA.pm,v 3.1 1998/03/14 18:23:40 msolomon Exp msolomon $
+# $Id: WeatherNOAA.pm,v 3.2 1998/03/21 14:10:26 msolomon Exp msolomon $
 # $Name:  $
 # Copyright 1998 Mark Solomon (See GNU GPL)
 #
@@ -29,7 +29,7 @@ require Exporter;
 
 
 # Preloaded methods go here.
-$VERSION = do { my @r = (q$Revision: 3.1 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 3.2 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 sub states {
@@ -123,9 +123,9 @@ sub get_forecast {
 		First_caps($key);
 		$value = ucfirst(lc($value));
 		push @$ref, join ': ', $key, $value;
-	  }
+	    }
 	    else {
-		$ref->[-1] .= ' ' . lc($_);
+		$ref->[-1] .= ' ' . lc($_) if @#{$ref};
 	    }
 	}
     }
@@ -213,7 +213,7 @@ sub get_currentWX {
 	}
 	elsif (/^\s*$CITY/i) {
 	    my @tmp = unpack
-		'@0 A15 @15 A9 @24 A5 @29 A5 @35 A4 @39 A8 @47 A8 @55 A8',$_ 
+		'@0 A15 @15 A9 @24 A5 @29 A5 @34 A4 @39 A8 @47 A8 @55 A8',$_ 
 		    if length($_) > 54;
 	    # print "DATA: ", join(',',@tmp),"\n" if @tmp;
 	    # check to see if there's city data (NEW YORK, etc);
@@ -281,12 +281,29 @@ sub get_currentWX_html {
     else {
 	$wx{WIND} = "$direction at ${speed} mph";
 	$wx{WIND} .= ", gusts up to ${gusts} mph" if $gusts;
-    }	
-    
-    
+    }
+
+    my $rh_pres;
+    if ($wx{RH}) {
+	$rh_pres = " The relative humidity is $wx{RH}\%";
+    }
+    if ($wx{PRES}) {
+	my %rise_fall = qw/R rising S steady F falling/;
+	my $direction = join '',map $rise_fall{$_},split( /\d(\w)/g, $wx{PRES} );
+	$wx{PRES} =~ tr/RSF//d;
+	if ($rh_pres) {
+		$rh_pres .= ", and b";
+	}
+	else {
+		$rh_pres .= " B";
+	}
+	$rh_pres .= "arometric pressure is $direction at $wx{PRES} in";
+    }
+    $rh_pres .= '.' if $rh_pres;
+	    
     my $out = "At $wx{TIME}, $wx{CITY}, ";
     $out .= "$wx{STATE} was experiencing $sky{$wx{'SKY/WX'}} ";
-    $out .= "at $wx{TEMP}&deg;F, wind is $wx{WIND}.\n";
+    $out .= "at $wx{TEMP}&deg;F, wind is $wx{WIND}.  $rh_pres\n";
     return $out;
 
 } # get_currentWX_html()

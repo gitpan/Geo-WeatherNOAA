@@ -5,7 +5,7 @@
 #
 #	3/2/98 Mark Solomon <msolomon@seva.net>
 #	Copyright 1998 Mark Solomon (See GNU GPL)
-#	$Id: wx.cgi,v 3.1 1998/03/14 18:22:41 msolomon Exp $
+#	$Id: wx.cgi,v 3.4 1998/03/15 21:40:03 msolomon Exp msolomon $
 #	$Name:  $
 #
 
@@ -19,13 +19,14 @@ BEGIN {
 }
 
 
-my $VERSION = do { my @r = (q$Revision: 3.1 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+my $VERSION = do { my @r = (q$Revision: 3.4 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $ME = ( split('/',$0) )[-1] . " $VERSION";
 
 my $q = new CGI;
 
 my $city = uc($q->param("city")) || 'NEWPORT NEWS';
 my $state = uc($q->param('state')) || 'VA';
+Geo::WeatherNOAA::First_caps($city);
 
 ($state) = ($state =~ /^(\w\w)/);
 my @states = Geo::WeatherNOAA::states();
@@ -75,18 +76,19 @@ my $out;
 
 #$| = 1;
 #print "Content-Type: multipart/x-mixed-replace;boundary=myboundary\n\nmyboundary\n";
-#print $q->start_html(-title=>'Mark\'s Local Wx',-bgcolor=>'#e5e5e5');
+#print $q->start_html(-title=>"Mark's Local Wx for $city, $state",-bgcolor=>'#e5e5e5');
 #print "<H2>Please wait...collecting data</H2>\n\nmyboundary";
 
 %wx = get_forecast($city,$state,30);
 
 $out = $q->header,"\n";
-$out .= $q->start_html(-title=>'Mark\'s Local Wx',-bgcolor=>'#e5e5e5');
+$out .= $q->start_html(-title=>"Mark's Local Wx for $city, $state",-bgcolor=>'#e5e5e5');
 $out .=<<ENDTOP;
 <FONT SIZE=1>According to <A HREF='http://www.noaa.gov'>NOAA</A>:</FONT>
 <P>
 <CENTER>
-<TABLE WIDTH=550 CELLPADDING=5 CELLSPACING=0 BORDER=1 BGCOLOR='#ffffff'>
+<TABLE WIDTH=550 CELLPADDING=2 CELLSPACING=1 BORDER=0 BGCOLOR='#000000'><TR><TD>
+<TABLE WIDTH=550 CELLPADDING=5 CELLSPACING=1 BORDER=0 BGCOLOR='#000000'>
 
 <!-- Title bar -->
 <TR>
@@ -128,7 +130,7 @@ sub run_list {
 @EXTENDED = split "\n", $wx{EXTENDED};
 run_list('NEAR',"Forecast: <FONT SIZE=\"-2\">(Updated $wx{Date})</FONT>") if (@NEAR);
 run_list('EXTENDED','Extended Forecast:') if (@EXTENDED);
-Geo::WeatherNOAA::First_caps($city);
+$wx{Coverage} ||= 'No data available for area requested';
 
 $out .= <<ENDBOTTOM;
 <TR VALIGN=TOP>
@@ -140,6 +142,7 @@ $out .= <<ENDBOTTOM;
 	<TD BGCOLOR="$DARKGREY"><FONT SIZE=1>$ME - by <A HREF="mailto:msolomon\@seva.net">Mark Solomon</A><BR>
 		Data retrieved from <A HREF="$wx{URL}">$wx{URL}</A> and processed by <A HREF="http://www.seva.net/~msolomon/wx/dist/">this perl script.</A></TD>
 </TR>
+</TD></TR></TABLE>
 </TD></TR></TABLE>
 </TD></TR></TABLE>
 

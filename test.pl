@@ -24,6 +24,7 @@ my $TMPDIR = 'tmp-wxdata-test/';
 {
 	# Test plain get_forecast() without using cache
 	my %wx;
+	print "$test...";
 	if ( %wx = get_forecast('BOSTON','MA') ) {
 		print "ok $test\n";
 	} else {
