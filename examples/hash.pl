@@ -2,7 +2,7 @@
 
 use Geo::WeatherNOAA;
 
-print "WeatherNOAA.pm v.$WeatherNOAA::VERSION\n";
+print "Geo::WeatherNOAA.pm v.$Geo::WeatherNOAA::VERSION\n";
 
 ($date,$warnings,$forecast) = 
      process_city_zone('cameron','pa','','get');

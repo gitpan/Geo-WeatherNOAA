@@ -1,3 +1,18 @@
+Mon Feb 22 15:01:00 1999  msolomon  <msolomon@fido.seva.net>
+
+	* WeatherNOAA.pm:
+	Per pudge@pobox.com from cpan-testers@perl.org, changed splitting on
+	"\n"'s to "\012"'s for the MacOS folks
+
+Fri Feb 19 21:20:47 1999  msolomon  <msolomon@fido.seva.net>
+
+	* dist/icons.tar: Added
+
+Thu Feb 18 20:12:21 1999  msolomon  <msolomon@fido.seva.net>
+
+	* examples/wx.cgi, examples/hash.pl, examples/simple2.pl:
+	Changed WeahterNOAA to Geo::WeatherNOAA
+
 Wed Feb 17 17:39:44 1999  msolomon  <msolomon@fido.seva.net>
 
 	* WeatherNOAA.pm: Added return of Coverage area in process_city_zone()

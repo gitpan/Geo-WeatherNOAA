@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.27 1999/02/17 17:39:44 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.28 1999/02/22 15:01:00 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,7 +30,7 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.27 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.28 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
@@ -82,8 +82,8 @@ sub process_city_zone {
 
 	# Split coverage, date, and forecast
 	#
-	my ($coverage, $date, $forecast) = ($in =~ /(^.*?)\n	# Coverage
-						    (\d.*?)\n	# Date
+	my ($coverage, $date, $forecast) = ($in =~ /(^.*?)\012	# Coverage
+						    (\d.*?)\012	# Date
 						    (.*)/sx);	# Entire Forecast
 	
 	# Format Coverage
@@ -108,7 +108,7 @@ sub process_city_zone {
 	my $forecast_item;	# Used as place holder for line breaks of $value
 	my $warnings_done = 0;	# Flag for warnings (Always at top of forcast)
 
-	foreach my $line (split "\n",$forecast) {
+	foreach my $line (split "\012",$forecast) {
 		my ($key,$value);
 		($key,$value) = ($line =~ /(.*?)\.\.\.(.*)/);
 
@@ -180,12 +180,12 @@ sub get_city_zone {
 
 	# Find our city's data from all raw data
 	#
-	foreach my $section ($rawData =~ /\n${state}Z.*?	# StateZone
-					  \n(.*?)		# Data sect
-					  \n(?:\$\$|NNN)/xsg) {
+	foreach my $section ($rawData =~ /\012${state}Z.*?	# StateZone
+					  \012(.*?)		# Data sect
+					  \012(?:\$\$|NNN)/xsg) {
 		# Iterate though section and get coverage
 		my $coverage_ended = 0;
-		foreach my $line (split /\n/, $section) {
+		foreach my $line (split /\012/, $section) {
 			$line =~ tr/\r//d;
 			$coverage .= $line . "\n" if (! $coverage_ended);
 			if ($line !~ /^\w/) {

@@ -4,10 +4,9 @@
 # Description: New wx.cgi with WeatherNOAA v4
 #      Author: Mark Solomon <msolomon@seva.net>
 #        Date: 01/19/99
-#    Revision: $Id: wx.cgi,v 1.1 1999/02/06 04:04:44 msolomon Exp $
+#    Revision: $Id: wx.cgi,v 1.2 1999/02/18 20:12:21 msolomon Exp $
 #
 
-use lib '../WeatherNOAA';
 use Geo::WeatherNOAA;
 
 use CGI;
@@ -18,7 +17,7 @@ BEGIN { $ENV{'PATH'} 	= '';
 }
 
 
-$VERSION = do { my @r = (q$Revision: 1.1 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 1.2 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 
 $q = new CGI;
 
