@@ -1,15 +1,10 @@
-README
 Changes
 MANIFEST
 Makefile.PL
 WeatherNOAA.pm
 test.pl
-examples/example1.html
-examples/example2.html
-examples/example3.html
-examples/example4.txt
-examples/example5.txt
+README
+examples/hash.pl
 examples/simple.pl
 examples/simple2.pl
-examples/update_state
 examples/wx.cgi

@@ -1,63 +1,296 @@
-#
-# Geo::WeatherNOAA.pm (Weather Module)
-# Mark Solomon <msolomon@seva.net> 
-# Started 3/2/98
-# $Id: WeatherNOAA.pm,v 3.12 1998/11/11 14:29:10 msolomon Exp $
-# $Name:  $
-# Copyright 1998 Mark Solomon (See GNU GPL)
-#
+
+# $Id: WeatherNOAA.pm,v 4.25 1999/02/11 19:26:02 msolomon Exp $
+
 
 package Geo::WeatherNOAA;
 
-use LWP::Simple;
-use LWP::UserAgent;
-use Text::Wrap;
 use strict;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+use LWP::Simple;
+use LWP::UserAgent;
+use Tie::IxHash;
+use Text::Wrap;
 
 require Exporter;
 
-@ISA = qw(Exporter AutoLoader);
+@ISA = qw(Exporter);
 # Items to export into callers namespace by default. Note: do not export
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
-@EXPORT = qw( 
-	get_currentWX
-	get_currentWX_html
-	get_forecast
+@EXPORT = qw(
+	make_noaa_table
+
 	print_forecast
+	print_current
+
+	get_city_zone
+	process_city_zone
+
+	get_city_hourly
+	process_city_hourly
 );
 
-
-# Preloaded methods go here.
-$VERSION = do { my @r = (q$Revision: 3.12 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.25 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
 $proxy_from_env = 0;
 
-sub states {
-	return (qw/al ak az ar ca co ct de fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nh nj nm nv ny nc nd oh ok or pa pr ri sc sd tn tx ut vt va wa wv wi wy/);
+# Preloaded methods go here.
+
+sub print_forecast {
+	my ($city, $state, $filename, $fileopt, $UA) = @_;
+	my $in = get_city_zone($city,$state,$filename,$fileopt,$UA);
+
+	my $out;
+
+	$out = "Geo::WeatherNOAA.pm v.$Geo::WeatherNOAA::VERSION\n";
+
+	my ($date,$warnings,$forecast) = 
+	   process_city_zone($city,$state,$filename,$fileopt);
+
+	$out .= "As of $date:\n";
+	foreach my $warning (@$warnings) {
+		$out .= wrap('WARNING: ','    ',"$warning\n");
+	}
+	foreach my $key (keys %$forecast) {
+        	$out .= wrap('','    ',"$key: $forecast->{$key}\n");
+	}
+	return $out
 }
 
-sub First_caps {
-    my $in = \(shift);
-    $$in = ucfirst(lc($$in));
-    $$in =~ s/\s([a-z])/ \U$1/g;
-    return $$in;
-} # First_caps()
 
-sub First_caps_sent {
-    my $in = \(shift);
-    $$in = ucfirst(lc($$in));
-    $$in =~ s/([\.:]\W+)([a-z])/$1\U$2/g;	# Cap first of sent
-    $$in = ucfirst($$in);
-    return $$in;
-} # First_caps_sent()
+#########################################################################
+#########################################################################
+#
+# Zone file processing
+#
+#########################################################################
+#########################################################################
+sub process_city_zone {
+	my ($city, $state, $filename, $fileopt, $UA) = @_;
+	my $in = get_city_zone($city,$state,$filename,$fileopt);
 
-sub getURL {
-    Usgae("Bad args to getURL()") if (@_ lt 2);
+	# Return error if problem getting URL
+	if ($in =~ /Error/) {
+		my %error;
+		my @null;
+		$error{'Error'} = 'Error';
+		$error{'Network Error'} = $in;
+		return ('',\@null,\%error);
+	}
+
+	# Split coverage, date, and forecast
+	#
+	my ($coverage, $date, $forecast) = ($in =~ /(^.*?)\n	# Coverage
+						    (\d.*?)\n	# Date
+						    (.*)/sx);	# Entire Forecast
+	
+	# Format Coverage
+	#
+	$coverage =~ s/corrected//gi;		# Remove stat word
+	$coverage =~ s/(\/|-|\.\.\.)/,/g;	# Turn weird punct to commas
+	$coverage =~ s/,\s*$//;			# Remove last comma
+	$coverage = ucfirst_words($coverage);	# Make caps correct
+	
+	# Format date (easy)
+	#
+	$date = format_date($date);
+
+	# Vars for forecast
+	#
+	my %forecast;
+	tie %forecast, "Tie::IxHash";
+	my @warnings;
+
+	# Iterate through forecast and assign warnings to list or pairs to hash
+	#
+	my $forecast_item;	# Used as place holder for line breaks of $value
+	my $warnings_done = 0;	# Flag for warnings (Always at top of forcast)
+
+	foreach my $line (split "\n",$forecast) {
+		my ($key,$value);
+		($key,$value) = ($line =~ /(.*?)\.\.\.(.*)/);
+
+		if (! $value) {
+			# If there's no value, this must be either a warning or
+			# a continutation of value-data
+			$key = $line;
+		}
+		next if ($key =~ /EXTENDED/);
+
+
+		$warnings_done = 1 if ( ($key) && ($value) );
+		#print "\n\nWARN_DONE: $warnings_done\n";
+
+		if ($warnings_done) {
+			if ( ($key =~ s/^\.//) && ($value) && ($key) ) {
+				# Add VALUE to KEY (new key)
+				$key =~ s/^\.//;
+				$key = ucfirst_words($key);
+				$forecast_item = $key;
+				$forecast{$forecast_item} .= $value;
+			}
+			else {
+				# Add KEY (with data) to OLD KEY (FORECAST_ITEM)
+				$forecast{$forecast_item} .= ' ' . $key;
+			}
+		}
+		elsif ( (!$key) && ($value) ) {
+			$value = ucfirst lc $value;
+			push @warnings, $value;
+		}
+	}
+
+	foreach my $key ( keys %forecast ) {
+		$forecast{$key} =~ tr/\n//d;			# Remove newlines
+		#$forecast{$key} = lc($forecast{$key});	# No all CAPS
+		$forecast{$key} =~ s/\s+/ /g;			# Rid of multi-spaces
+		$forecast{$key} = sent_caps($forecast{$key});	# Proper sentance caps
+	}
+
+	return ($date,\@warnings,\%forecast);
+
+} # process_city_zone()
+
+sub get_city_zone {
+	my ($city, $state, $filename, $fileopt, $UA) = @_;
+
+	my $URL = $URL_BASE . lc $state . '/zone.html';
+		
+
+	# City and States must be capital
+	#
+	$state = uc($state);
+	$city  = uc($city);
+
+	# Declare some working vars
+	#
+	my ($rawData, $coverage);
+
+	# Get data from filehandle object
+	#
+	$rawData = get_data($URL,$filename,$fileopt);
+
+	# Return error if there's an error
+	if ($rawData =~ /Error/) {
+		return $rawData;
+	}
+
+	# Find our city's data from all raw data
+	#
+	foreach my $section ($rawData =~ /\n${state}Z.*?	# StateZone
+					  \n(.*?)		# Data sect
+					  \n(?:\$\$|NNN)/xsg) {
+		# Iterate though section and get coverage
+		my $coverage_ended = 0;
+		foreach my $line (split /\n/, $section) {
+			$line =~ tr/\r//d;
+			$coverage .= $line . "\n" if (! $coverage_ended);
+			if ($line !~ /^\w/) {
+				$coverage_ended = 1;
+			} 
+		}
+		return $section if ($coverage =~ /$city/i);
+	}
+	return "$city not found";
+}
+
+##############################################################################
+##############################################################################
+##
+## Html for Mark's Site
+## 
+##############################################################################
+##############################################################################
+
+sub font2 {
+	my $in = shift;
+	my $font_face = $main::font_face || 'FACE="Helvetica, Lucida, Ariel"';
+	return qq|<FONT SIZE="2" $font_face>$in</FONT>|;
+}
+
+sub make_noaa_table {
+	my ($city, $state, $filename, $fileopt, $UA, $max_items) = @_;
+
+	$fileopt ||= 'get';
+	$max_items && $max_items--;
+	$max_items ||= 3;
+	
+	my $med_bg   = $main::med_bg || '#ddddff';
+	my $light_bg = $main::light_bg || '#eeeeff';
+	my $font_face = $main::font_face || 'FACE="Helvetica, Lucida, Ariel"';
+
+	my $locfilename;
+	$locfilename = $filename . "_hourly";
+	my $current = process_city_hourly( $city,$state,$locfilename,$fileopt,$UA );
+		
+	$locfilename = $filename . "_zone";
+	my ($date,$warnings,$forecast) = process_city_zone( $city,$state,$locfilename,$fileopt,$UA);
+	my $cols = (keys %$forecast);
+	$cols = $max_items if $cols > $max_items;
+	my $out;
+	$out .= qq|<TABLE WIDTH="100%" CELLPADDING=1>\n|;
+	$out .= qq|<!-- Current weather row -->\n|;
+	$out .= qq|<TR VALIGN=TOP><TD BGCOLOR="$med_bg">\n|;
+	$out .= font2('Current') . "\n</TD>\n";
+	$out .= qq|<TD COLSPAN="$cols">|;
+	$out .= font2($current) . "\n</TD></TR>\n";
+
+	# Add one to make cols real width of table
+	#
+	$cols++;
+
+	# Add warnings, if needed
+	#
+	if (@$warnings) {
+		$out .= qq|<!-- Warnings -->\n|;
+		foreach my $warning (@$warnings) {
+			$out .= qq|<TR BGCOLOR="#FF8389" ALIGN="CENTER">\n|;
+			$out .= qq|\t<TD COLSPAN="$cols">|;
+			$out .= qq|<FONT $font_face COLOR="#440000">\n|;
+			$out .= qq|\t$warning\n</TD></TR>\n|;
+		}
+	}
+
+	# Iterate over the first $max_items items in forecast
+	#
+	my $bottom; # add this after the iteration;
+	$out    .= qq|<TR VALIGN="TOP" BGCOLOR="$med_bg">\n|;
+	$bottom .= qq|<TR VALIGN="TOP">\n|;
+	foreach my $key ( (keys %$forecast)[0..($cols - 1)] ) {
+		#print STDERR "DEBUG: $key\n";
+		$out    .= "\t<TD>" . font2($key) . "</TD>\n";
+		$bottom .= "\t<TD>" . font2($forecast->{$key}) . "</TD>\n";
+	}
+	$out .= "</TR>\n" . $bottom . "</TR>\n";
+	
+	# Add credits
+	#
+	my $wx_cred = '<A HREF="http://www.noaa.gov">NOAA</A> forecast made ' .
+	  "$date by " .
+	  "<A HREF=\"http://www.seva.net/~msolomon/WeatherNOAA/dist/\">" .
+	  "Geo::WeatherNOAA</A> V.$Geo::WeatherNOAA::VERSION";
+	$out .= qq|<TR BGCOLOR="$light_bg" ALIGN="CENTER">\n|;
+	$out .= qq|<TD COLSPAN="$cols">| . font2($wx_cred) . "</TD></TR>\n";
+	$out .= qq|</TABLE>\n|;
+
+
+
+}
+
+##############################################################################
+##############################################################################
+##
+## Misc funcs
+## 
+##############################################################################
+##############################################################################
+
+sub get_url {
     my ($URL, $UA) = @_;
+
+	$URL or die "No URL to get!";
 
     # Create the useragent and get the data
     #
@@ -65,346 +298,211 @@ sub getURL {
 	$UA = new LWP::UserAgent;
         $UA->env_proxy if $proxy_from_env;
     }
-    $UA->agent("Geo-WeatherNOAA/$VERSION");
+    $UA->agent("WeatherNOAA/$VERSION");
     
     # Create a request
-    # print STDERR "Getting forecast from $URL\n";
     my $req = new HTTP::Request GET => $URL;
     my $res = $UA->request($req);
     if ($res->is_success) {	
-	return $res->content;
+		return $res->content;
     }
     else {
-	Usage("Cannot get Wx Data at $URL");
+		return;
     }
 } # getURL()    
 
-sub get_forecast {
-    Usage("Bad Arguments") if (@_ lt 2);
-    my ($CITY,$STATE,$CACHE,$CACHEDIR,$UA) = @_;
+sub get_data {
+	my ($URL,$filename,$fileopt,$UA) = @_;
 
-    $CITY = uc($CITY);
-    ($STATE) = ($STATE =~ /^(\w\w)/);  # Untaint
-    $STATE = uc($STATE);
+	$fileopt ||= 'get';
 
-    my %retValue;	# This will be returned
-    
-    my $URL = lc($URL_BASE . "$STATE/zone.html");
-    $retValue{URL} = $URL;
+	my $data;	# Data
 
-    my $RAW_DATA;
-    if ($CACHE) {
-	$RAW_DATA  = get_cache($STATE,'zone',$CACHE,$CACHEDIR,$UA);
-    }
-    else {
-	$RAW_DATA = getURL($URL, $UA);
-    }
-    
-    $RAW_DATA =~ tr/\r//d;
-    
-    # get @list of REAL data
-    #
-    my $START_ZONE = "\U${STATE}Z";
-    my @RAW_DATA = (); 
-    #while ( $RAW_DATA =~ /$START_ZONE(.*?)\$\$/gs ) {
-	while ( $RAW_DATA =~ /$START_ZONE(.*?)(\$\$|NNNN)/gs ) {
-	my $data = $1;
-	# This next line removes confusing NWS Station ID
-	$data =~ s#\nNATIONAL\sWEATHER\sSERVICE.*?\n#\n#gs;
-	push @RAW_DATA, $data;
-    }
+	if ( ($fileopt eq 'get') || ($fileopt eq 'save') ) {
+		print STDERR "Retrieving $URL\n" if $main::opt_v;
+		$data = get_url($URL,$UA) || 
+			return "Error getting data from $URL"; 
+		if ( $fileopt eq 'save' ) {
+			print STDERR "Writing $URL to $filename\n" if $main::opt_v;
+			open(OUT,">$filename") or die "Cannot create $filename";
+			print OUT $data;
+			close OUT;
+			$fileopt = 'usefile';
+		}
+	}
+	if ( $fileopt eq 'usefile' ) {
+		print STDERR "Reading data from $filename\n" if $main::opt_v;
+		open(FILE,$filename) or die "Cannot read $filename";
+		while (<FILE>) { $data .= $_; }
+	}
+	return $data;
+} # get_fh
+
+sub format_date {
+	my $in = shift;
+	$in =~ s/^(\d+)(\d\d)\s(AM|PM)\s(\w+)\s(\w+)\s(\w+)\s0*(\d+)/$1:$2\L$3\E ($4) \u\L$5\E\E \u\L$6 $7,/;
+	$in =~ tr/\r//d;
+	return $in;
+}
+sub sent_caps {
+	my $in = shift;
+	$in = ucfirst(lc($in));
+	$in =~ s/(\.\W+)(\w)/$1\U$2/g;		# Proper sentance caps
+	return $in;
+}
+
+sub ucfirst_words {
+	my ($in) = @_;
+	return join " ", map ucfirst(lc($_)),(split /\s+/, $in);
+}
+
+#########################################################################
+#########################################################################
+##
+## Hourly city data
+##
+#########################################################################
+#########################################################################
+
+sub get_city_hourly {
+	my ($city,$state,$filename,$fileopt,$UA) = @_;
 	
-    my ($LOCAL_DATA) = grep /$CITY/, @RAW_DATA; # get local section
-    
-    
-    # Separate header info and data
-    #
-    my $type = 'HEAD';				# This will show where we are in data
-    my (@NEAR, @EXTENDED, $HEAD); 
-    my @LOCAL_DATA = split('\n',$LOCAL_DATA);
-    foreach (@LOCAL_DATA) {
-	chomp;					# No \n's
-	s/^\s*//;				# No leading spaces
-	if ($type eq 'HEAD') {
-	    if (/^\d+\s(AM|PM)/) {
-		$retValue{Date} = $_ if ! $retValue{Date};
-	    }
-	    elsif ((! $retValue{Date}) && ($_) ) {	# If no date and data
-		$HEAD .= "$_";		#    append to HEAD
-	    }
-	    else {
-		# We're past the head set type to NEAR
-		$type = 'NEAR';
-	    }
-	}
-	elsif ( ( /FORECAST\.\.\.$/ ) || (/EXTENDED FORECAST/) ) {
-	    $type = 'EXTENDED';
-	}
-	elsif ( $type =~ /(NEAR|EXTENDED)/ ) {
-	    my $ref;
-	    $ref = \@NEAR if $type eq 'NEAR';
-	    $ref = \@EXTENDED if $type eq 'EXTENDED';
-	    next unless $ref;
-	    if (/^\.\.\./) {	# This indicates a warning
-		push @$ref, /^\.\.\.(.*)/;
-	    }
-	    elsif (/^\.\w/) {	# This indicates a list item
-		my ($key,$value) = /\.([\w\s]+)\.\.\.*(.*)$/;
-		First_caps($key);
-		$value = ucfirst(lc($value));
-		push @$ref, join ': ', $key, $value;
-	    }
-	    else {
-		$ref->[-1] .= ' ' . lc($_) if $#{$ref} >= 0;
-	    }
-	}
-    }
-    
-    # Split cites into ';' delin list 
-    #
-    $HEAD =~ s#([/&-]|INCLUDING|\.\.\.)#;#g;
-    $HEAD =~ s/\b(?:THE|AND|CITIES\sOF)\b//g;
-    my @HEAD;
-    @HEAD = grep ! /^$/, grep ! /\d/, split ';', $HEAD;
-    foreach (@HEAD) {
-	s#(?:^\s+|\s*$)##; 		# remove extraneous \s's
-    }
-    $retValue{Coverage} = join ', ', sort { lc($a) cmp lc($b) } grep ! /^$/, @HEAD;
-    First_caps($retValue{Coverage}); 
-    
-    caps_and_symbols(\@NEAR);
-    caps_and_symbols(\@EXTENDED);
-    $retValue{NEAR} = join "\n",@NEAR; 
-    $retValue{EXTENDED} = join "\n",@EXTENDED; 
-    return %retValue;
+	# City and state in all caps please
+	#
+	$city  = uc $city;
+	$state = uc $state;
 
-} # get_wx()
+	# work var
+	my ($fields,$line,$date,$time);
+	
+	# Get data
+	#
+	my $URL = $URL_BASE . lc $state . '/hourly.html';
+	my $data = get_data($URL,$filename,$fileopt,$UA);
 
-sub caps_and_symbols {
-    my $ref = shift;
-    for (@$ref) {
-	First_caps_sent($_);
-	s/</&lt;/g;
-	s/>/&gt;/g;
-	s/\.\.\.$//;
-    }
+	# Return error if there's an error
+	if ($data =~ /Error/) {
+		my %retHash;
+		$retHash{ERROR} = $data;
+		return \%retHash;
+	}
+
+	$data =~ s/\r//g;
+
+	# Get line for our city from Data
+	#
+	foreach (split /\n/, $data) {
+		chomp;
+		$date   = $_ if /^\s*(\d+)(\d\d)\s+(AM|PM)\s+(\w+)/;
+		$time = "$1:$2 $3" if (($1) && ($2) && ($3));
+		$fields = $_ if /^CITY/;
+		$line   = $_ if /^$city\s/;
+		
+		# Newest data seems to be at the top of the file
+		last if $line;
+	}
+	$date = format_date($date);
+
+	# unpack gives error of the string is smaller than the unpack string
+	$line .= ' ' x (64 - length($line)) if length($line) < 64;
+	
+	return { } unless ( ($line) && ($fields) ); # Return ref to empty hash
+
+	my @fields;
+	push @fields, 'DATE', 'TIME', unpack
+                '@0 A15 @15 A9 @24 A5 @29 A5 @35 A4 @39 A8 @47 A8 @55 A8', $fields if $fields;
+	my @values;
+	push @values, $date, $time, unpack 
+		'@0 A15 @15 A9 @24 A5 @29 A5 @35 A4 @39 A8 @47 A8 @55 A8', $line;
+	return { } if $values[3] eq 'NOT AVBL'; # Return ref to empty hash
+
+	my %retValue;
+	foreach my $i (0..$#fields) {
+		$retValue{$fields[$i]} = $values[$i];
+	}
+
+	return \%retValue;
+
+} # get_city_hourly()
+
+sub print_current {
+	my ($city,$state,$filename,$fileopt,$UA) = @_;
+	my $in = process_city_hourly($city, $state, $filename, $fileopt,$UA);
+	return wrap('','    ',$in)
 }
 
-sub print_forecast {
-	my %wx = get_forecast(@_);
-	print "Forecast for $_[0], $_[1]\n";
-	for (split "\n",$wx{NEAR}) {
-		my ($key,$data) = split ':';
-		print wrap '', ' 'x4, "WARNING: $key\n\n" if ! $data;
-		print wrap '', ' 'x4, "$_\n\n" if $data;
-	}
+	
+sub process_city_hourly {
+	my ($city,$state,$filename,$fileopt,$UA) = @_;
+	my $in = get_city_hourly($city, $state, $filename, $fileopt,$UA);
 
-} # print_forecast()
+	$state = uc($state);
 
-##########################################################################
-#
-#	New section: get_currentWX()
-#
-##########################################################################
+	return $in->{ERROR} if $in->{ERROR};
+	$in->{CITY} or return "No data available";
+	$in->{CITY} = ucfirst_words($in->{CITY});
+	
+	my %sky = (
+               'SUNNY'          => 'sunny skies',
+               'MOSUNNY'        => 'mostly sunny skies',
+               'PTSUNNY'        => 'partly sunny skies',
+               'CLEAR'          => 'clear weather',
+               'DRIZZLE'        => 'a drizzle',
+               'CLOUDY'         => 'cloudy skies',
+               'MOCLDY'         => 'mostly cloudy skies',
+               'PTCLDY'         => 'partly cloudy skies',
+               'LGT RAIN'       => 'light rain',
+               'FLURRIES'       => 'flurries',
+               'LGT SNOW'       => 'light snow',
+               'SNOW'           => 'snow',
+               'N/A'            => 'N/A',
+               'NOT AVBL'       => '*not available*',
+               'FAIR'           => 'fair weather');
 
-sub get_currentWX {
-    Usage("Bad Arguments") if (@_ lt 2);
-    my ($CITY,$STATE,$CACHE,$CACHEDIR,$UA) = @_;
-    $CITY = uc($CITY);
-    ($STATE) = ($STATE =~ /^(\w\w)/);  # Untaint
-    $STATE = uc($STATE);
-    
-    # my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
-    my $URL = lc($URL_BASE . "$STATE/hourly.html");
-    
-    my $RAW_DATA;
-    if (! $CACHE) {
-	$RAW_DATA = getURL($URL,$UA) || 
-	    Usage("Cannot get current wx data at $URL");
-    }
-    else {
-	$RAW_DATA = get_cache($STATE,'hourly',$CACHE,$CACHEDIR,$UA);
-    }
-    $RAW_DATA =~ tr/\r//d;
-    my @RAW_DATA = split /\n/, $RAW_DATA;
-    
-    my $date = localtime();
-    my $year = (split( /\s+/, $date))[4];
-    
-    my %returnHash;
-    my (@return_keys, @return_data);
-    
-    foreach (@RAW_DATA) {
-	tr/\r//;
-	if (/^CITY/) {
-	    push @return_keys, unpack
-		'@0 A15 @15 A9 @24 A5 @29 A5 @35 A4 @39 A8 @47 A8 @55 A8',$_ 
-		    if length($_) > 54;
-	    # print "KEYS: ", join(',',@return_keys),"\n" if @return_keys;
-	}
-	elsif (/^\s*$CITY/i) {
-	    my @tmp = unpack
-		'@0 A15 @15 A9 @24 A5 @29 A5 @34 A4 @39 A8 @47 A8 @55 A8',$_ 
-		    if length($_) > 54;
-	    # print "DATA: ", join(',',@tmp),"\n" if @tmp;
-	    # check to see if there's city data (NEW YORK, etc);
-	    $tmp[6] and push @return_data, @tmp;
-	}
-	elsif (/$year/) {
-	    $returnHash{DATE} = $_;
-	    
-	    # Load TIME with data's time
-	    my @tmp = /(\d+)\s+(AM|PM)\s+(\w+)/;
-	    $tmp[0] =~ s/(\d+)(\d\d)/$1:$2/;
-	    $returnHash{TIME} = "$tmp[0]\L$tmp[1] \U$tmp[2]";
-	}
-    }
-    
-    $returnHash{'URL'} = $URL;
-    $returnHash{'STATE'} = $STATE;
-    
-    my $i;
-    foreach $i (0..$#return_keys) {
-	$returnHash{ $return_keys[$i] } = $return_data[$i] if $return_data[$i];
-    }
-    return %returnHash;
+	# Format the wind direction and speed
+	#
+	my %compass = qw/N north S south E east W west/;
+	my $direction = join '',map $compass{$_},split(/(\w)\d/g, $in->{WIND});
+	my ($speed) = ($in->{WIND} =~ /(\d+)/);
+	my ($gusts) = ($in->{WIND} =~ /G(\d+)/);
 
-} # get_currentWX()
-
-
-sub get_currentWX_html {
-    my $CITY = shift;
-    my $STATE = shift;
-    my $CACHE = shift;
-    my $CACHEDIR = shift;
-    
-    my %sky = (
-	       'SUNNY'	        => 'sunny skies',
-	       'MOSUNNY'	=> 'mostly sunny skies',
-	       'PTSUNNY'	=> 'partly sunny skies',
-	       'CLEAR' 	        => 'clear weather',
-	       'DRIZZLE'        => 'a drizzle',
-	       'CLOUDY'	        => 'cloudy skies',
-	       'MOCLDY'	        => 'mostly cloudy skies',
-	       'PTCLDY'	        => 'partly cloudy skies',
-	       'LGT RAIN'	=> 'light rain',
-	       'FLURRIES'	=> 'flurries',
-	       'LGT SNOW'	=> 'light snow',
-	       'SNOW'		=> 'snow',
-	       'N/A'		=> 'N/A',
-	       'NOT AVBL'	=> '*not available*',
-	       'FAIR'		=> 'fair weather');
-    my %compass = qw/N north S south E east W west/;
-    
-    my %wx = get_currentWX($CITY,$STATE,$CACHE,$CACHEDIR);
-    
-    $wx{CITY} or return "No data available";
-    First_caps($wx{CITY});
-    $wx{STATE} = uc($wx{STATE});
-    
-    my $direction = join '',map $compass{$_},split( /(\w)\d/g, $wx{WIND} );
-    my ($speed) = ($wx{WIND} =~ /(\d+)/);
-    my ($gusts) = ($wx{WIND} =~ /G(\d+)/);
-    
-    if ($wx{WIND} eq 'CALM') {
-	$wx{WIND} = 'calm';
-    }
-    else {
-	$wx{WIND} = "$direction at ${speed} mph";
-	$wx{WIND} .= ", gusts up to ${gusts} mph" if $gusts;
-    }
-
-    my $rh_pres;
-    if ($wx{RH}) {
-	$rh_pres = " The relative humidity was $wx{RH}\%";
-    }
-    if ($wx{PRES}) {
-	my %rise_fall = qw/R rising S steady F falling/;
-	my $direction = join '',map $rise_fall{$_},split( /\d(\w)/g, $wx{PRES} );
-	$wx{PRES} =~ tr/RSF//d;
-	if ($rh_pres) {
-		$rh_pres .= ", and b";
+	if ($in->{WIND} eq 'CALM') {
+		$in->{WIND} = 'calm';
 	}
 	else {
-		$rh_pres .= " B";
+		$in->{WIND} = "$direction at ${speed} mph";
+		$in->{WIND} .= ", gusts up to ${gusts} mph" if $gusts;
 	}
-	$rh_pres .= "arometric pressure was $direction at $wx{PRES} in";
-    }
-    $rh_pres .= '.' if $rh_pres;
-	    
-    my $out = "At $wx{TIME}, $wx{CITY}, ";
-    $out .= "$wx{STATE} was experiencing $sky{$wx{'SKY/WX'}} ";
-    $out .= "at $wx{TEMP}&deg;F, wind is $wx{WIND}.  $rh_pres\n";
-    return $out;
 
-} # get_currentWX_html()
+	# Format relative hudity and ibarometric pressure
+	#
+	my $rh_pres;
+    	if ($in->{RH}) {
+        	$rh_pres = " The relative humidity was $in->{RH}\%";
+    	}
+	if ($in->{PRES}) {
+          my %rise_fall = qw/R rising S steady F falling/;
+          my $direction = join '',map $rise_fall{$_},split(/\d(\w)/g, $in->{PRES});
+          $in->{PRES} =~ tr/RSF//d;
+          if ($rh_pres) {
+                $rh_pres .= ", and b";
+          }
+          else {
+                $rh_pres .= " B";
+          }
+          $rh_pres .= "arometric pressure was $direction from $in->{PRES} in";
+    	}
+    	$rh_pres .= '.' if $rh_pres;
 
-sub Usage {
-    my ($in) = @_;
-    my $errmsg = "ERROR: $in Geo::WeatherNOAA v$VERSION";
-    print STDOUT "Content-type:text/plain\n\n" . $errmsg . "\n";
-    # exit(1);
-    die("$errmsg");
-    
-} # Usage()
+	# Format output sentence
+	#
+	my $out;
+	$out  = "At $in->{TIME}, $in->{CITY}, $state was experiencing ";
+	$out .= $sky{$in->{'SKY/WX'}} . " ";
+	$out .= "at $in->{TEMP}&deg;F, wind was $in->{WIND}. $rh_pres\n";
+	return $out;
 
-sub Error {
-  Misc::WX::Usage(@_);
-}
-
-sub get_cache {
-    Usage("Wrong args to get_cache()") if (@_ lt '3');
-    my $STATE = lc(shift);
-    ($STATE) = ($STATE =~ /^(\w\w)/);  # Untaint
-    my $TYPE = lc(shift);
-    my $CACHE = shift;
-    my $DIR = shift;
-    $DIR or $DIR = '/tmp/wxdata';
-    my $UA = shift;
-    my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
-    my $URL = $URL_BASE . "${STATE}/${TYPE}.html";
-    my $FILE = "$DIR/$STATE\_$TYPE\.html";
-    if (! opendir(DIR,$DIR) ) {
-	mkdir $DIR, 0775 || Usage("Cannot make $DIR: $!");
-    }
-    closedir DIR;
-
-    open(TOUCH,">$DIR/time") or Usage("Cannot make NOWfile: $!");
-    print TOUCH "\n"; close TOUCH;
-
-    my $testfile = ( stat($FILE) )[9];
-    my $nowfile = ( stat("$DIR/time") )[9];
-    unlink "$DIR/time" || print STDERR "Cannot delete $DIR/time\n";
-    if ( ($nowfile - $testfile) > (60 * $CACHE)) {
-	open(CACHE,">$FILE") or Usage("Cannot create $FILE: $!");
-	# print STDERR "GETTING NEW DATA\n";
-	#my $DATA = get($URL);
-	my $DATA = getURL($URL,$UA);
-	print CACHE $DATA;
-	close CACHE;
-	return $DATA;
-    }
-    else {
-	open(FILE,"$FILE") or Usage($!);
-	my $retValue;
-	while (<FILE>) { $retValue .= "$_"; }
-	return $retValue;
-    }
-
-} # get_cache() 
-
-sub State_verify {
-	my $state = shift;
-	$state = lc($state);
-	my @states = states();
-	if (! grep /$state/, @states ) {
-		print "Content-type:text/plain\n\nERROR: $state is not a U.S. state\n";
-		exit(1);
-	}
-	else {
-		return 1;
-	}
-} # State_verify()
+} # process_city_hourly()
 
 # Autoload methods go after =cut, and are processed by the autosplit program.
 
@@ -414,208 +512,155 @@ __END__
 
 =head1 NAME
 
-Geo::WeatherNOAA - Perl extension for getting NOAA Weather(Wx) Data
+Geo::WeatherNOAA - Perl extension for interpreting the NOAA weather data
 
 =head1 SYNOPSIS
 
   use Geo::WeatherNOAA;
-  print get_currentWX_html('NEW YORK','NY');
-  print_forecast('NEW YORK','NY');
+  ($date,$warnings,$forecast) = 
+     process_city_zone('newport','ri','','get');
 
-  %wx = get_forecast('BOSTON','MA');
-  print "The forecast is $wx{NEAR}\n";
-  print "The extended forecast is $wx{EXTENDED}\n";
-  print "This information was updated $wx{Date}\n";
-  print "The affected areas are $wx{Coverage}\n";
+  foreach $key (keys %$forecast) {
+  	print "$key: $forecast->{$key}\n";
+  }
+  
+  print process_city_hourly('newport news', 'va', '', 'get');
+
+or
+
+  use Geo::WeatherNOAA;
+  print print_forecast('newport news','va');
 
 =head1 DESCRIPTION
 
-I needed a way to get NOAA weather data for both web pages and
-perl scripts for web pages etc.  This module gets information from the
-NOAA web site and "decodes" it into usable format: hashes, lists, 
-english, etc.
+This module is intended to interpret the NOAA zone forecasts and current
+city hourly data files.  It should give a programmer an easy time to use the
+data instead of having to mine it.
 
-=head1 FUNCTIONS
-
-The idea behind these function calls is simplicity.  Each function needs
-at least the city and state.  If you want to use the neato cacheing
-function, give the minutes to cache and, optionally, the directory to
-use to hold the weather data cache.
+=head1 REQUIRES
 
 =over 4
 
-=item * 
+=item * Tie::IxHash
 
-get_forecast(CITY,STATE,CACHE,CACHEDIR,LWP_UserAgent)
+=item * LWP::Simple
 
-Call with at least to tokens: City and State (Two letter abbr)
+=item * LWP::UserAgent
 
-The third token, if used will tell the module to use the
-caching function so that the data will only be retrieved
-from NOAA when the cached data is this many minutes old.
-I figured this would be usefull to a web server where only
-the first 'hit' would have to wait for the remote data.
+=item * Text::Wrap
 
-The fourth argument is the directory in which to cache the data.
-If omitted, the module will use B<C</tmp/wxdata>>
+=back
 
-The fifth argument is for a user created LWP::UserAgent(3) which
-can be configured to work with firewalls. See the LWP::UserAgent(3)
-manpage for specific instructions. A basic example is like this:
+=head1 FUNCTIONS
 
-    my $ua = new LWP::UserAgent;
-    $ua->proxy(['http', 'ftp'], 'http://proxy.my.net:8080/');
+=over 4
 
-If you merely wish to set your proxy data from environment variables
-(as in C<$ua->env_proxy>), simply set
+=item * print_forecast(CITY,STATE,FILENAME,FILEOPT,LWP_UserAgent)
 
-    $Geo::WeatherNOAA::proxy_from_env = 1;
+Returns text of the forecast
 
-This function returns a hash with the following keys:
+=item * print_current(CITY,STATE,FILENAME,FILEOPT,LWP_UserAgent)
 
-  Coverage 	=> A list of the affected areas for the forecast
-  Date 		=> Date/time when the data was reported to NOAA
-  NEAR 		=> Newline delineated list, each line contains
-		   a colon (:) delin list of day and data.
-		   NOTE: If there's no data, the "key" is a weather
-		   warning
-  EXTENDED 	=> Same as NEAR but without weather warnings
-  URL 		=> URL where the data originated
+Returns text of current weather
 
-It can be used like this:
+=item * make_noaa_table(CITY,STATE,FILENAME,FILEOPT,LWP_UserAgent, MaxItems)
 
-  use Geo::WeatherNOAA;
-  %wx = get_forecast('BOSTON','MA');
-  print "The forecast is $wx{NEAR}\n";
-  print "The extended forecast is $wx{EXTENDED}\n";
-  print "This information was updated $wx{Date}\n";
-  print "and covers $wx{Coverage}\n";
+This call gives the basic html table with current data and forecast for the
+next four periods ("tonight", "tomorrow","tomorrow night","day after")
+and warnings in an (I think) attractive, easy to read way.
 
-In examples/wx.cgi, I split the NEAR and EXTENDED fields to make nicer output:
+Max Items is a way to limit the number of items in the table returned...
+I think it looks best with no more than 4...5 gets crowded looking.
 
-  use Geo::WeatherNOAA;
-  %wx = get_forecast('BOSTON','MA');
-  print "<TABLE>\n";
-  foreach $line (split "\n", $wx{NEAR}) {
-      my ($day,$data) = split /:/, $line;
+=item * process_city_hourly(CITY,STATE,FILENAME,FILEOPT,LWP_UserAgent)
 
-      if ($data) {
-          # Normal line if there are both keys
-          print "<TR><TD>$day</TD><TD>$data</TD></TR>\n";
-      } else {
-          # Warning line if there's only the $day value
-          print "<TR><TD COLSPAN=2>$day</TD></TR>\n";
-      }
-  }	
-  print "</TABLE>\n";
+FILENAME is the file read from with FILEOPT "usefile" and written to
+if FILEOPT is "save"
 
-=item * 
+FILEOPT can be one of the following
 
-print_forecast(CITY,STATE)
+	- save
+		will get and save the data to FILENAME
+	- get
+		will retrieve new data (not store it)
+	- usefile
+		will not retrieve data from URL, 
+		use FILENAME for data
 
-Prints an english (text) description of the forecast
+The fifth argument is for a user created LWP::UserAgent(3) which can
+be configured to work with firewalls. See the LWP::UserAgent(3) manpage 
+for specific instructions. A basic example is like this: 
 
-Its output looks like this:
+   my $ua = new LWP::UserAgent;
+   $ua->proxy(['http', 'ftp'], 'http://proxy.my.net:8080/');
 
-	Forecast for BLACKSBURG, VA for March 6, 1998
+If you merely wish to set your proxy data from environment 
+variables (as in $ua-env_proxy>), simply set 
 
-  WARNING: The national weather service has issued a flood watch for
-    late tonight through monday
-    
-  WARNING: A wind advisory has also been posted for very late tonight 
-    through monday... 
+   $Geo::WeatherNOAA::proxy_from_env = 1;
 
-  Tonight: Showers...With a chance of thunderstorms.  Lows in the upper
-    40s. South wind around 15 mph. Chance of rain near 100 percent.
 
-  Monday: Showers with a chance of thunderstorms...Mainly in the 
-    morning.
+=item * process_city_zone(CITY,STATE,FILENAME,FILEOPT,LWP_UserAgent)
 
-  Turning cooler.  Temperatures falling into the lower 40s. West wind
-    around 15 mph.  Chance of rain 90 percent.
-    
-  Monday night: Mostly cloudy with a chance of rain or snow. Breezy. 
-    Lows mostly in the 20s. Chance of precipitation 40 percent.
-    
-  Tuesday: Partly cloudy with a chance of snow flurries.	
-    Colder and breezy. Highs from the upper 20s to near 40. 
-    
+Call CITY, STATE, FILENAME (explained above), FILEOPT(explained above),
+and UserAgent (Explained above).
 
-=item * 
+The return is a three element list containing a) a string of the date/time
+of the forecast, b) a reference to the list of warnings (if any), and
+c) a reference to the hash of forecast.  I recommend calling it like this:
 
-get_currentWX(CITY,STATE,CACHE,CACHEDIR,LWP_UserAgent)
+    ($date, $warnings, $forecast) = 
+        process_city_zone('newport news','va',
+	'/tmp/va_zone.html', 'save');
 
-Call with at least to tokens: City and State (Two letter abbr)
+Explanation of this call, it returns:
 
-The third token, if used will tell the module to use the
-caching function so that the data will only be retrieved
-from NOAA when the cached data is this many minutes old.
-I figured this would be usefull to a web server where only
-the first 'hit' would have to wait for the remote data.
+	$date
+	- Scalar of the date of the forecast
 
-The fourth argument is the directory in which to cache the data.
-If omitted, the module will use B<C</tmp/wxdata>>
+	$warnings
+	- Reference to the warnings list
+	- EXAMPLE:
+	  foreach (@$warnings) { print; }
+	
+	$forecast
+	- Reference to the forecast KEY, VALUE pairs
+	- EXAMPLE:
+	  foreach $key (keys %$forecast) {
+	  	print "$key: $forecast->{$key}\n";
+	  }
 
-The fifth argument is for a user created LWP::UserAgent(3) which
-can be configured to work with firewalls. See the LWP::UserAgent(3)
-manpage for specific instructions. A basic example is like this:
 
-    my $ua = new LWP::UserAgent;
-    $ua->proxy(['http', 'ftp'], 'http://proxy.my.net:8080/');
 
-If you merely wish to set your proxy data from environment variables
-(as in C<$ua->env_proxy>), simply set
+=item * get_city_zone(CITY,STATE,FILENAME,FILEOPT,LWP_UserAgent)
 
-    $Geo::WeatherNOAA::proxy_from_env = 1;
+This sub is to get the block of data from the data source, which is
+chosen with the FILEOPTswitch.  
 
-This function returns a hash with the following keys:
+=item * get_city_hourly(CITY,STATE,FILENAME,FILEOPT,LWP_UserAgent)
 
-  CITY		=> Name of reported city
-  SKY/WX	=> Sky conditions
-  TEMP		=> Current temp
-  DEWPT		=> Dewpoint
-  RH		=> Relative Humidity
-  WIND		=> Wind direction and speed
-  PRES		=> Pressure
-  REMARKS	=> Remarks
+This function gets the current weather from the data source, which is
+decided from FILEOPT(explained above).  Input is CITY, STATE,
+FILENAME (filename to read/write from if FILEOPTis "get" or "usefile"),
+and UserAgent.
 
-=item * 
+This function returns a reference to a hash containing the data. It
 
-get_current_html(CITY,STATE,CACHE)
-
-Call with at least to tokens: City and State (Two letter abbr)
-
-The third token, if used will tell the module to use the
-	caching function so that the data will only be retrieved
-	from NOAA when the cached data is this many minutes old.
-	I figured this would be usefull to a web server where only
-	the first 'hit' would have to wait for the remote data.
-
-This call returns a scalar containing a (sort-of) htmlized english
-sentence describing the weather in the requested city.
-
-  use Geo::WeatherNOAA;
-  $weather = get_currentWX_html('RICHMOND','VA');
-  print "$weather\n";
-
-The output looks like this:
-
-  At 8:00pm EST, Richmond, VA was experiencing cloudy skies at 66°F,
-  wind is south at 15mph. 
+Same FILEOPTand LWP_UserAgent from above, and process the 
+current weather data into an english sentence.
 
 =back
 
 =head1 AUTHOR
 
-Mark Solomon 
+Mark Solomon
 
 msolomon@seva.net
 
-http://www.seva.net/~msolomon/wx/
+http://www.seva.net/~msolomon/
 
 =head1 SEE ALSO
 
-perl(1), LWP(3), LWP::UserAgent(3).
+perl(1), Tie::IxHash(3), LWP::Simple(3), LWP::UserAgent(3).
 
 =cut
-

@@ -1,12 +1,6 @@
 #!/usr/local/bin/perl
-#
 
-use lib '.';
 use Geo::WeatherNOAA;
 
-$CITY = "NEW YORK";
-$STATE = "NY";
-
-print get_currentWX_html($CITY,$STATE);
-print_forecast($CITY,$STATE);
-
+print print_current('newport news','va');
+print print_forecast('newport news','va');

@@ -1,18 +1,23 @@
-$Id: README,v 1.4 1998/03/14 18:15:52 msolomon Exp $
+$Id: README,v 1.5 1999/02/11 19:26:01 msolomon Exp $
 
--------------------------------------------------------------
-Note: 3.01 changed the name from Misc::WX to Geo::WeatherNOAA
--------------------------------------------------------------
+----------
+IMPORTANT!
+----------
+Version 4 is a complete re-write of code and has NONE of the same
+function calls or returns, so read the docs if you want to use it.
 
 This module enable one to easily get official weather information from
 NOAA, their "Zone Reports" and hourly "state roundups." I wanted to be
 able to get his information quickly and easily for web pages, or the
 command line, etc.
 
+I've also started a List-Serv for this module for those interested.  Look at
+http://fido.seva.net:8090/mailman/listinfo/weathernoaa for info to join
+
 A quick example to get a current weather in Boston, MA is as simple as:
 
-	use Geo::WeatherNOAA;
-	print get_currentWX_html('BOSTON','MA');
+	use WeatherNOAA;
+	print print_current('BOSTON','MA');
  
 Would result with:
 	At 12:00pm EST, Boston, MA was experiencing light rain at 
@@ -20,7 +25,11 @@ Would result with:
 
 Requirements:
 -------------
-	perl 5.004 (or at least Text::Wrap)
+	perl(1)
+	Text::Wrap
+	Tie::IxHash
+	LWP::UserAgent
+	LWP::Simple
 	LWP (libwww-perl)
 
 
