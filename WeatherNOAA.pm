@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.33 1999/04/06 14:03:18 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.34 2000/01/03 14:08:42 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,7 +30,7 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.33 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+$VERSION = do { my @r = (q$Revision: 4.34 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
 
 use vars '$proxy_from_env';
@@ -222,7 +222,7 @@ sub make_noaa_table {
 
 	$fileopt ||= 'get';
 	$max_items && $max_items--;
-	$max_items ||= 3;
+	$max_items ||= 5;
 	
 	my $med_bg   = $main::med_bg || '#ddddff';
 	my $light_bg = $main::light_bg || '#eeeeff';
@@ -391,7 +391,9 @@ sub get_city_hourly {
 	# Get data
 	#
 	my $URL = $URL_BASE . lc $state . '/hourly.html';
+	#print STDERR "Getting data\n";
 	my $data = get_data($URL,$filename,$fileopt,$UA);
+	#print STDERR "Got data\n";
 
 	# Return error if there's an error
 	if ($data =~ /Error/) {
@@ -416,21 +418,49 @@ sub get_city_hourly {
 	}
 	$date = format_date($date);
 
+	# Set pack strings
+	#
+	my $fields_pack_str;
+	my $values_pack_str;
+	if ( ($fields =~ /TMP/) and ($fields =~ /\sDP\s/) ) {
+		#print STDERR "NEW FORMAT!\n";
+		$fields_pack_str = 
+        	'@0 A15 @15 A9 @25 A3 @29 A2 @33 A2 @36 A8 @47 A5 @54 A7';
+		$values_pack_str = 
+			'@0 A15 @15 A8 @24 A4 @28 A4 @32 A3 @36 A8 @46 A7 @53 A8';
+	}
+	else {
+		#print STDERR "OLD FORMAT!\n";
+		$fields_pack_str = 
+        	'@0 A15 @15 A9 @24 A5 @29 A5 @35 A4 @39 A8 @47 A8 @55 A8';
+		$values_pack_str = 
+			'@0 A15 @15 A9 @24 A5 @29 A5 @34 A4 @39 A8 @47 A8 @55 A8';
+	}
+
 	# unpack gives error of the string is smaller than the unpack string
 	$line .= ' ' x (64 - length($line)) if length($line) < 64;
 	
 	return { } unless ( ($line) && ($fields) ); # Return ref to empty hash
 
 	my @fields;
-	push @fields, 'DATE', 'TIME', unpack
-        '@0 A15 @15 A9 @24 A5 @29 A5 @35 A4 @39 A8 @47 A8 @55 A8', $fields if $fields;
+	push @fields, 'DATE', 'TIME', unpack $fields_pack_str, $fields if $fields;
+        #'@0 A15 @15 A9 @24 A5 @29 A5 @35 A4 @39 A8 @47 A8 @55 A8', $fields if $fields;
 	my @values;
-	push @values, $date, $time, unpack 
-		'@0 A15 @15 A9 @24 A5 @29 A5 @34 A4 @39 A8 @47 A8 @55 A8', $line;
+	push @values, $date, $time, unpack $values_pack_str, $line;
+	#print STDERR "$line\n";
+		#'@0 A15 @15 A9 @24 A5 @29 A5 @34 A4 @39 A8 @47 A8 @55 A8', $line;
+
+	
+
 	return { } if $values[3] eq 'NOT AVBL'; # Return ref to empty hash
 
 	my %retValue;
 	foreach my $i (0..$#fields) {
+		# Convert odd fieldnames to standard
+		$fields[$i] = 'DEWPT' if $fields[$i] eq 'DP';
+		$fields[$i] = 'TEMP' if $fields[$i] eq 'TMP';
+
+		# Assign value
 		$retValue{$fields[$i]} = $values[$i];
 	}
 
@@ -465,6 +495,7 @@ sub process_city_hourly {
                'MOCLDY'         => 'mostly cloudy skies',
                'PTCLDY'         => 'partly cloudy skies',
                'LGT RAIN'       => 'light rain',
+			   'FRZ DRZL'		=> 'freezing drizzle',
                'FLURRIES'       => 'flurries',
                'LGT SNOW'       => 'light snow',
                'SNOW'           => 'snow',
@@ -487,7 +518,7 @@ sub process_city_hourly {
 		$in->{WIND} .= ", gusts up to ${gusts} mph" if $gusts;
 	}
 
-	# Format relative hudity and ibarometric pressure
+	# Format relative humidity and ibarometric pressure
 	#
 	my $rh_pres;
     	if ($in->{RH}) {
@@ -510,7 +541,7 @@ sub process_city_hourly {
 	# Format output sentence
 	#
 	my $out;
-	$out  = "At $in->{TIME}, $in->{CITY}, $state was experiencing ";
+	$out  = "At $in->{TIME}, $in->{CITY}, $state conditions were ";
 	$out .= $sky{$in->{'SKY/WX'}} . " ";
 	$out .= "at $in->{TEMP}&deg;F, wind was $in->{WIND}. $rh_pres\n";
 	return $out;
