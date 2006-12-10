@@ -1,5 +1,5 @@
 
-# $Id: WeatherNOAA.pm,v 4.37 2002/01/30 21:58:11 msolomon Exp $
+# $Id: WeatherNOAA.pm,v 4.38 2006/12/10 21:58:11 msolomon Exp $
 
 
 package Geo::WeatherNOAA;
@@ -30,8 +30,10 @@ require Exporter;
 	process_city_hourly
 );
 
-$VERSION = do { my @r = (q$Revision: 4.37 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
-my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
+$VERSION = do { my @r = (q$Revision: 4.38 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+# my $URL_BASE = 'http://iwin.nws.noaa.gov/iwin/';
+my $URL_BASE = 'http://www.weather.gov/view/prodsByState.php?';
+# state=ia&prodtype=zone
 
 use vars '$proxy_from_env';
 $proxy_from_env = 0;
@@ -79,6 +81,7 @@ sub process_city_zone {
 		$error{'Network Error'} = $in;
 		return ('',\@null,\%error);
 	}
+	#print STDERR $in;exit;
 
 	# Split coverage, date, and forecast
 	#
@@ -173,7 +176,8 @@ sub process_city_zone {
 sub get_city_zone {
 	my ($city, $state, $filename, $fileopt, $UA) = @_;
 
-	my $URL = $URL_BASE . lc $state . '/zone.html';
+	# my $URL = $URL_BASE . lc $state . '/zone.html';
+	my $URL = $URL_BASE . 'state=' . lc($state) . '&prodtype=zone';
 		
 
 	# City and States must be capital
@@ -188,6 +192,40 @@ sub get_city_zone {
 	# Get data from filehandle object
 	#
 	$rawData = get_data($URL,$filename,$fileopt,$UA);
+	
+	# clean raw data to remove leading whitespace (I hope this works) 2006-12-10
+	#$rawData =~ s#\n\s*\.#\n.#gm;
+
+	#my $t1 = $rawData;
+	#$rawData =~ s#\r\n#\n#sg;
+	$rawData =~ s#\n\s+#\n#sg;
+
+	$rawData =~ s#\$\$#ENDOFSECTION#sg;
+
+	# print STDERR $rawData;
+	foreach my $line ($rawData =~ /\n(\w\wZ.*?)\012/sg) {
+		$line =~ s/\r//g;
+		$line =~ s/\n//g;
+		# print STDERR "HERE: " . $line . "\n";
+		my $pattern = "$line\\n(.*?)\\n(?:ENDOFSECTION|NNN)";
+		#print STDERR "PATTERN=" . $pattern . "<--\n";
+		my $section = ($rawData =~ /$pattern/sg)[0];
+		if ($section) {
+			#print "\n\n$section\n";
+			#print "   SIZE OF DATA: " . length($section) . "\n";
+			# Iterate though section and get coverage
+			my $coverage_ended = 0;
+			foreach my $line (split /\012/, $section) {
+				$line =~ tr/\015//d; # \r
+				$coverage .= $line . "\n" if (! $coverage_ended);
+				if ($line !~ /^\w/) {
+					$coverage_ended = 1;
+				} 
+			}
+			return $section if ( ($coverage =~ /$city/i) && ($section =~ /\d{4}/));
+		}
+	}
+	return "$city not found";
 
 	# Return error if there's an error
 	if ($rawData =~ /Error/) {
@@ -197,9 +235,10 @@ sub get_city_zone {
 	# Find our city's data from all raw data
 	#
 	#foreach my $section ($rawData =~ /\012${state}Z.*?	# StateZone
-	foreach my $section ($rawData =~ /\012\w\wZ.*?	# StateZone
-					  \012(.*?)		# Data sect
-					  \012(?:\$\$|NNN)/xsg) {
+	foreach my $section ($rawData =~ /\013\w\wZ.*?	# StateZone
+					  \012\013(.*?)		# Data sect
+					  \012\013(?:\$\$|NNN)/xsg) {
+		# print STDERR "\n\nSECTION:\n$section\n";
 		# Iterate though section and get coverage
 		my $coverage_ended = 0;
 		foreach my $line (split /\012/, $section) {
@@ -320,8 +359,10 @@ sub get_url {
     # Create the useragent and get the data
     #
     if (! $UA) {
-	$UA = new LWP::UserAgent;
-        $UA->env_proxy if $proxy_from_env;
+		$UA = new LWP::UserAgent;
+		if ( $ENV{'HTTP_PROXY'} or $ENV{'http_proxy'} ) {
+        	$UA->env_proxy;
+		}
     }
     $UA->agent("WeatherNOAA/$VERSION");
     
@@ -402,10 +443,12 @@ sub get_city_hourly {
 	
 	# Get data
 	#
-	my $URL = $URL_BASE . lc $state . '/hourly.html';
-	#print STDERR "Getting data\n";
+	#my $URL = $URL_BASE . lc $state . '/hourly.html';
+	my $URL = $URL_BASE . 'state=' . lc($state) . '&prodtype=hourly';
+	#print STDERR "Getting data from $URL\n";
 	my $data = get_data($URL,$filename,$fileopt,$UA);
-	#print STDERR "Got data\n";
+	my $datalength = length($data);
+	#print STDERR "Got data ($datalength)\n";
 
 	# Return error if there's an error
 	if ($data =~ /Error/) {
@@ -416,14 +459,19 @@ sub get_city_hourly {
 
 	$data =~ s/\015//g; # \r
 
+	#print STDERR "LOOKING FOR: " . $city . "\n";
+
 	# Get line for our city from Data
 	#
 	foreach (split /\012/, $data) {
 		chomp;
+		s/^\s*//;
 		$date   = $_ if /^\s*(\d+)(\d\d)\s+(AM|PM)\s+(\w+)/;
 		$time = "$1:$2 $3" if (($1) && ($2) && ($3));
 		$fields = $_ if /^CITY/;
 		$line   = $_ if /^$city\s/;
+
+		#print STDERR "LINE: $line\n" if $line;
 		
 		# Newest data seems to be at the top of the file
 		last if $line;
@@ -518,7 +566,16 @@ sub process_city_hourly {
 	# Format the wind direction and speed
 	#
 	my %compass = qw/N north S south E east W west/;
-	my $direction = join '',map $compass{$_},split(/(\w)\d/g, $in->{WIND});
+	# my $direction = join '',map $compass{$_},split(/(\w)\d/g, $in->{WIND});
+	my $direction;
+	{
+		$direction = $in->{WIND};
+		$direction =~ s/(.*?)G.*/$1/; 	# Remove gusts
+		$direction =~ s/\d//g;			# Remove digits
+		if ( $direction ) {
+			$direction = $compass{$direction};
+		}
+	}
 	my ($speed) = ($in->{WIND} =~ /(\d+)/);
 	my ($gusts) = ($in->{WIND} =~ /G(\d+)/);
 
@@ -538,7 +595,15 @@ sub process_city_hourly {
     	}
 	if ($in->{PRES}) {
           my %rise_fall = qw/R rising S steady F falling/;
-          my $direction = join '',map $rise_fall{$_},split(/\d(\w)/g, $in->{PRES});
+          # my $direction = join '',map $rise_fall{$_},split(/\d(\w)/g, $in->{PRES});
+          my $direction;
+		  {
+		  	$direction = $in->{PRES};
+			$direction = ( $direction =~ /.*(\w)$/ )[0];
+			if ( $direction ) {
+				$direction = $rise_fall{$direction};
+			}
+		  }
           $in->{PRES} =~ tr/RSF//d;
           if ($rh_pres) {
                 $rh_pres .= ", and b";
@@ -654,11 +719,9 @@ for specific instructions. A basic example is like this:
    my $ua = new LWP::UserAgent;
    $ua->proxy(['http', 'ftp'], 'http://proxy.my.net:8080/');
 
-If you merely wish to set your proxy data from environment 
-variables (as in $ua-env_proxy>), simply set 
-
-   $Geo::WeatherNOAA::proxy_from_env = 1;
-
+NOTE: You may also set the environment variable <CODE>http_proxy</CODE>
+and the auto-generated LWP::UserAgent will use LWP::UserAgent::env_proxy().
+See LWP::UserAgent for more details.
 
 =item * process_city_zone(CITY,STATE,FILENAME,FILEOPT,LWP_UserAgent)
 

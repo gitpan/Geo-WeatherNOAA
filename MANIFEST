@@ -8,3 +8,4 @@ examples/hash.pl
 examples/simple.pl
 examples/simple2.pl
 examples/wx.cgi
+META.yml                                 Module meta-data (added by MakeMaker)

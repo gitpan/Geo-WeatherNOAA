@@ -1,3 +1,8 @@
+Sun Dec 10 2006  Mark Solomon
+	* WeatherNOAA.pm:
+	Changed url from noaa's to weather.gov
+	Changed algorythm to new one to accomodate NOAA's minor formatting changes in text output of their app to be able to find data
+
 Wed Jan 30 21:58:11 2002  Mark Solomon  <msolomon@fido.seva.net>
 
 	* WeatherNOAA.pm, t.pl:
